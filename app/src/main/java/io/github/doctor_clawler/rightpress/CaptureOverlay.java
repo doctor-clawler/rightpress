@@ -7,12 +7,19 @@ import android.graphics.Insets;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
+import android.os.Bundle;
 import android.os.SystemClock;
+import android.text.Layout;
+import android.text.StaticLayout;
+import android.text.TextDirectionHeuristics;
+import android.text.TextPaint;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.WindowMetrics;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.widget.Button;
 
 import java.util.ArrayList;
 
@@ -35,9 +42,45 @@ public final class CaptureOverlay extends View {
         setBackgroundColor(Color.TRANSPARENT);
         setFocusable(false);
         setClickable(true);
+        refreshLanguage();
     }
 
     private float dp(float v) { return v * getResources().getDisplayMetrics().density; }
+
+    /** Android's text layout handles shaping, bidi and system font fallback. */
+    private static StaticLayout exitLabel(Context context, int screenWidth) {
+        float density = context.getResources().getDisplayMetrics().density;
+        TextPaint text = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        text.setColor(Color.WHITE);
+        text.setTypeface(android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD));
+        text.setTextSize(15 * context.getResources().getDisplayMetrics().scaledDensity);
+        text.setTextLocales(context.getResources().getConfiguration().getLocales());
+        String label = context.getString(R.string.stop_mouse);
+        int maximum = Math.max(1, Math.round(Math.min(240 * density, screenWidth * .65f) - 32 * density));
+        int desired = (int) Math.ceil(Layout.getDesiredWidth(label, text));
+        int width = Math.min(maximum, Math.max(Math.round(77 * density), desired));
+        return StaticLayout.Builder.obtain(label, 0, label.length(), text, width)
+                .setTextDirection(TextDirectionHeuristics.FIRSTSTRONG_LTR)
+                .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                .setIncludePad(true)
+                .build();
+    }
+
+    static int exitTouchHeight(Context context, int screenWidth) {
+        float density = context.getResources().getDisplayMetrics().density;
+        return Math.max(Math.round(EXIT_TOUCH_HEIGHT_DP * density),
+                exitLabel(context, screenWidth).getHeight() + Math.round(28 * density));
+    }
+
+    void refreshLanguage() {
+        setContentDescription(getContext().getString(R.string.stop_mouse));
+        invalidate();
+    }
+
+    static int exitTouchWidth(Context context, int screenWidth) {
+        return exitLabel(context, screenWidth).getWidth()
+                + Math.round(40 * context.getResources().getDisplayMetrics().density);
+    }
     Insets safeInsets() {
         // Accessibility overlays sit above system bars, so their root insets may
         // be zero. WindowMetrics retains the display's actual protected bounds.
@@ -59,9 +102,46 @@ public final class CaptureOverlay extends View {
     }
 
     private boolean onExit(float x, float y) {
+        Rect bounds = exitBounds();
+        return x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom;
+    }
+
+    private Rect exitBounds() {
         Insets safe = safeInsets();
-        return x >= getWidth() - safe.right - dp(120) && x <= getWidth() - safe.right
-                && y >= safe.top && y <= safe.top + dp(EXIT_TOUCH_HEIGHT_DP);
+        int right = getWidth() - safe.right;
+        return new Rect(Math.max(safe.left, right - exitTouchWidth(getContext(), getWidth())), safe.top,
+                right, Math.min(getHeight() - safe.bottom, safe.top + exitTouchHeight(getContext(), getWidth())));
+    }
+
+    @Override public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
+        super.onInitializeAccessibilityNodeInfo(info);
+        // This is the overlay's only accessible control. Its node must describe
+        // the visible exit, not the full-screen region that relays mouse input.
+        info.setClassName(Button.class.getName());
+        info.setClickable(true);
+        info.setFocusable(true);
+        info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK);
+        Rect bounds = exitBounds();
+        info.setBoundsInParent(bounds);
+        int[] location = new int[2];
+        getLocationInWindow(location);
+        Rect windowBounds = new Rect(bounds);
+        windowBounds.offset(location[0], location[1]);
+        info.setBoundsInWindow(windowBounds);
+        getLocationOnScreen(location);
+        bounds.offset(location[0], location[1]);
+        info.setBoundsInScreen(bounds);
+    }
+
+    @Override public boolean performAccessibilityAction(int action, Bundle arguments) {
+        if (action == AccessibilityNodeInfo.ACTION_CLICK && isEnabled()) return performClick();
+        return super.performAccessibilityAction(action, arguments);
+    }
+
+    @Override public boolean performClick() {
+        super.performClick();
+        service.enableMode(false);
+        return true;
     }
 
     private boolean onExitScreen(float x, float y) {
@@ -82,13 +162,15 @@ public final class CaptureOverlay extends View {
         Insets safe = safeInsets();
         float w = getWidth() - safe.right;
         float top = safe.top;
+        StaticLayout label = exitLabel(getContext(), getWidth());
+        float width = label.getWidth() + dp(32);
+        float height = Math.max(dp(43), label.getHeight() + dp(16));
         paint.setColor(0xDF0F172A);
-        c.drawRoundRect(w - dp(117), top + dp(8), w - dp(8), top + dp(51), dp(15), dp(15), paint);
-        paint.setColor(Color.WHITE);
-        paint.setTextSize(dp(15));
-        paint.setFakeBoldText(true);
-        c.drawText("마우스 끄기", w - dp(100), top + dp(36), paint);
-        paint.setFakeBoldText(false);
+        c.drawRoundRect(w - width - dp(8), top + dp(8), w - dp(8), top + dp(8) + height, dp(15), dp(15), paint);
+        int save = c.save();
+        c.translate(w - width + dp(8), top + dp(8) + (height - label.getHeight()) / 2);
+        label.draw(c);
+        c.restoreToCount(save);
     }
 
     @Override public boolean onHoverEvent(MotionEvent event) {

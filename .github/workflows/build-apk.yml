@@ -34,6 +34,8 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - name: Install Android platform and build tools
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Check translation coverage and format arguments
+        run: python3 tools/localization.py check
       - name: Build debug app, lint and instrumentation APK
         run: ./gradlew :app:assembleDebug :app:lintDebug :app:assembleDebugAndroidTest --no-daemon
       # Device tests require the dedicated emulator evdev harness; compilation is the CI boundary.

@@ -3,11 +3,15 @@ package io.github.doctor_clawler.rightpress;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.accessibilityservice.GestureDescription;
+import android.app.LocaleManager;
 import android.content.Intent;
+import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.graphics.Path;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.LocaleList;
 import android.view.KeyEvent;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
@@ -41,12 +45,29 @@ public final class MouseLongPressService extends AccessibilityService {
     private int gestureGeneration;
     private int activeGestureGeneration = -1;
     private Runnable deferredShortcut;
+    private Resources languageResources;
 
     public static MouseLongPressService getInstance() { return instance; }
     public boolean isModeEnabled() { return modeEnabled; }
 
+    @Override public Resources getResources() {
+        return languageResources == null ? super.getResources() : languageResources;
+    }
+
+    private void refreshLanguageResources() {
+        // A freshly rebound accessibility service may receive the system locale
+        // even when its Activity has an app-language override. Resolve that
+        // override explicitly; never mutate the shared base Resources instance.
+        LocaleManager manager = getBaseContext().getSystemService(LocaleManager.class);
+        LocaleList selected = manager.getApplicationLocales();
+        Configuration configuration = new Configuration(getBaseContext().getResources().getConfiguration());
+        configuration.setLocales(selected.isEmpty() ? manager.getSystemLocales() : selected);
+        languageResources = getBaseContext().createConfigurationContext(configuration).getResources();
+    }
+
     @Override protected void onServiceConnected() {
         super.onServiceConnected();
+        refreshLanguageResources();
         // OS settings can enable a service without visiting the app. Reject that
         // path before installing event filters, reading windows or adding overlays.
         if (!AccessibilityConsent.isAccepted(this)) {
@@ -58,7 +79,7 @@ public final class MouseLongPressService extends AccessibilityService {
             deferredShortcut = null;
             if (instance == this) instance = null;
             notifyStateChanged();
-            Toast.makeText(this, "RightPress 앱에서 접근성 안내에 먼저 동의하세요", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, getString(R.string.consent_required), Toast.LENGTH_LONG).show();
             disableSelf();
             return;
         }
@@ -77,6 +98,22 @@ public final class MouseLongPressService extends AccessibilityService {
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) { }
+
+    @Override public void onConfigurationChanged(Configuration configuration) {
+        super.onConfigurationChanged(configuration);
+        refreshLanguageResources();
+        // Refresh display text without changing input settings or interrupting a gesture.
+        if (overlay != null) {
+            overlay.refreshLanguage();
+            if (overlayAttached && windowManager != null
+                    && overlay.getLayoutParams() instanceof WindowManager.LayoutParams) {
+                WindowManager.LayoutParams params = (WindowManager.LayoutParams) overlay.getLayoutParams();
+                params.setTitle(getString(R.string.overlay_title));
+                try { windowManager.updateViewLayout(overlay, params); }
+                catch (RuntimeException ex) { android.util.Log.w("RightPress", "Overlay title refresh failed", ex); }
+            }
+        }
+    }
     // This callback interrupts accessibility feedback, not the user's mode choice.
     @Override public void onInterrupt() { }
     @Override public void onDestroy() {
@@ -139,7 +176,7 @@ public final class MouseLongPressService extends AccessibilityService {
             if (ActionCatalog.LAUNCH_APP.equals(actionId)) {
                 launch = packageName == null ? null : getPackageManager().getLaunchIntentForPackage(packageName);
                 if (launch == null) {
-                    Toast.makeText(this, "앱 실행 실패 · 앱 다시 선택", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.error_launch_app), Toast.LENGTH_SHORT).show();
                     return false;
                 }
             }
@@ -169,8 +206,8 @@ public final class MouseLongPressService extends AccessibilityService {
             }
         } catch (RuntimeException ex) {
             Toast.makeText(this, ActionCatalog.LAUNCH_APP.equals(actionId)
-                ? "앱 실행 실패 · 앱 다시 선택"
-                : "현재 화면에서 실행 불가", Toast.LENGTH_SHORT).show();
+                ? getString(R.string.error_launch_app)
+                : getString(R.string.error_action_unavailable), Toast.LENGTH_SHORT).show();
             return false;
         }
     }
@@ -223,7 +260,7 @@ public final class MouseLongPressService extends AccessibilityService {
         );
         params.setFitInsetsTypes(android.view.WindowInsets.Type.systemBars()
                 | android.view.WindowInsets.Type.displayCutout());
-        params.setTitle("RightPress mouse capture mode");
+        params.setTitle(getString(R.string.overlay_title));
         try {
             windowManager.addView(overlay, params);
             overlayAttached = true;

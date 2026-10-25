@@ -1,5 +1,7 @@
 package io.github.doctor_clawler.rightpress;
 
+import android.content.Context;
+
 /** The bounded set of actions available to user-created input bindings. */
 public final class ActionCatalog {
     public static final String LONG_PRESS = "long_press";
@@ -13,33 +15,33 @@ public final class ActionCatalog {
 
     private ActionCatalog() { }
 
-    public static String title(String actionId) {
-        if (actionId == null) return "알 수 없는 동작";
+    public static String title(Context context, String actionId) {
+        if (actionId == null) return context.getString(R.string.action_unknown);
         switch (actionId) {
-            case LONG_PRESS: return "길게 누르기";
-            case BACK: return "뒤로";
-            case HOME: return "홈";
-            case RECENTS: return "최근 앱";
-            case NOTIFICATIONS: return "알림 열기";
-            case QUICK_SETTINGS: return "빠른 설정 열기";
-            case LAUNCH_APP: return "앱 실행";
-            case TOGGLE_MOUSE: return "마우스 변환 켜기/끄기";
-            default: return "알 수 없는 동작";
+            case LONG_PRESS: return context.getString(R.string.action_long_press);
+            case BACK: return context.getString(R.string.action_back);
+            case HOME: return context.getString(R.string.action_home);
+            case RECENTS: return context.getString(R.string.action_recents);
+            case NOTIFICATIONS: return context.getString(R.string.action_notifications);
+            case QUICK_SETTINGS: return context.getString(R.string.action_quick_settings);
+            case LAUNCH_APP: return context.getString(R.string.action_launch_app);
+            case TOGGLE_MOUSE: return context.getString(R.string.action_toggle_mouse);
+            default: return context.getString(R.string.action_unknown);
         }
     }
 
-    public static String description(String actionId) {
-        if (actionId == null) return "지원하지 않는 동작";
+    public static String description(Context context, String actionId) {
+        if (actionId == null) return context.getString(R.string.description_unknown);
         switch (actionId) {
-            case LONG_PRESS: return "포인터 위치 길게 누르기 · 미지원 시 버튼을 뗀 뒤 터치";
-            case BACK: return "이전 화면으로 이동";
-            case HOME: return "홈 화면으로 이동";
-            case RECENTS: return "최근 앱 목록 열기";
-            case NOTIFICATIONS: return "알림 패널 열기";
-            case QUICK_SETTINGS: return "빠른 설정 열기";
-            case LAUNCH_APP: return "선택한 앱 실행";
-            case TOGGLE_MOUSE: return "마우스만 켜기/끄기 · 키보드 설정 유지";
-            default: return "지원하지 않는 동작";
+            case LONG_PRESS: return context.getString(R.string.description_long_press);
+            case BACK: return context.getString(R.string.description_back);
+            case HOME: return context.getString(R.string.description_home);
+            case RECENTS: return context.getString(R.string.description_recents);
+            case NOTIFICATIONS: return context.getString(R.string.description_notifications);
+            case QUICK_SETTINGS: return context.getString(R.string.description_quick_settings);
+            case LAUNCH_APP: return context.getString(R.string.description_launch_app);
+            case TOGGLE_MOUSE: return context.getString(R.string.description_toggle_mouse);
+            default: return context.getString(R.string.description_unknown);
         }
     }
 

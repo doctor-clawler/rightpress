@@ -23,8 +23,8 @@ public final class ShortcutStore {
     private final SharedPreferences preferences;
 
     public ShortcutStore(Context context) {
-        Context application = context.getApplicationContext();
-        this.context = application == null ? context : application;
+        // Retain the caller's configuration so validation uses the app's chosen locale.
+        this.context = context;
         preferences = this.context.getSharedPreferences("settings", Context.MODE_PRIVATE);
     }
 
@@ -68,7 +68,7 @@ public final class ShortcutStore {
                 if (existing.id.equals(rule.id)) {
                     replacement = i;
                 } else if (existing.keyCode == rule.keyCode && existing.modifiers == rule.modifiers) {
-                    throw new IllegalArgumentException("이미 등록된 조합 · 꺼진 단축키 포함");
+                    throw new IllegalArgumentException(context.getString(R.string.error_duplicate_chord));
                 }
             }
             if (replacement >= 0) rules.set(replacement, rule);
@@ -100,7 +100,7 @@ public final class ShortcutStore {
     }
 
     public void setMouseAction(String actionId) {
-        if (!ActionCatalog.isMouseAction(actionId)) throw new IllegalArgumentException("지원하지 않는 우클릭 동작");
+        if (!ActionCatalog.isMouseAction(actionId)) throw new IllegalArgumentException(context.getString(R.string.error_mouse_action));
         preferences.edit().putString("mouse_action", actionId).apply();
         notifyChanged();
     }
@@ -109,19 +109,19 @@ public final class ShortcutStore {
         return KeyEvent.normalizeMetaState(event.getMetaState()) & MODIFIER_MASK;
     }
 
-    public static String validateChord(int keyCode, int modifiers) {
+    public static String validateChord(Context context, int keyCode, int modifiers) {
         if (keyCode <= KeyEvent.KEYCODE_UNKNOWN || keyCode > KeyEvent.getMaxKeyCode()
                 || KeyEvent.isModifierKey(keyCode) || keyCode == KeyEvent.KEYCODE_CAPS_LOCK
                 || keyCode == KeyEvent.KEYCODE_NUM_LOCK || keyCode == KeyEvent.KEYCODE_SCROLL_LOCK) {
-            return "Ctrl/Alt + 일반 키 필요";
+            return context.getString(R.string.error_regular_key);
         }
         int normalized = KeyEvent.normalizeMetaState(modifiers) & MODIFIER_MASK;
         if ((normalized & (KeyEvent.META_CTRL_ON | KeyEvent.META_ALT_ON)) == 0) {
-            return "Ctrl 또는 Alt 필요";
+            return context.getString(R.string.error_ctrl_alt_required);
         }
         if (keyCode == KeyEvent.KEYCODE_R && (normalized & KeyEvent.META_CTRL_ON) != 0
                 && (normalized & KeyEvent.META_ALT_ON) != 0) {
-            return "Ctrl+Alt+R: 마우스 변환 전용 · Shift 추가 불가";
+            return context.getString(R.string.error_reserved_chord);
         }
         return null;
     }
@@ -139,16 +139,16 @@ public final class ShortcutStore {
         return label.append(key).toString();
     }
 
-    private static String validationError(ShortcutRule rule) {
-        if (rule == null) return "단축키 정보 없음";
-        if (rule.id == null || rule.id.trim().isEmpty() || rule.id.length() > 128) return "단축키 ID 오류";
-        String chordError = validateChord(rule.keyCode, rule.modifiers);
+    private String validationError(ShortcutRule rule) {
+        if (rule == null) return context.getString(R.string.error_missing_shortcut);
+        if (rule.id == null || rule.id.trim().isEmpty() || rule.id.length() > 128) return context.getString(R.string.error_shortcut_id);
+        String chordError = validateChord(context, rule.keyCode, rule.modifiers);
         if (chordError != null) return chordError;
-        if (!ActionCatalog.isKeyboardAction(rule.actionId)) return "지원하지 않는 키보드 동작";
+        if (!ActionCatalog.isKeyboardAction(rule.actionId)) return context.getString(R.string.error_keyboard_action);
         if (ActionCatalog.LAUNCH_APP.equals(rule.actionId)
                 && (rule.packageName == null || rule.packageName.length() > 255
                     || !rule.packageName.matches("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*"))) {
-            return "실행할 앱 선택 필요";
+            return context.getString(R.string.error_choose_app);
         }
         return null;
     }
@@ -177,7 +177,7 @@ public final class ShortcutStore {
                 entries.put(entry);
             }
         } catch (JSONException ex) {
-            throw new IllegalArgumentException("단축키 저장 실패", ex);
+            throw new IllegalArgumentException(context.getString(R.string.error_save_shortcut), ex);
         }
         preferences.edit().putString(RULES_KEY, entries.toString()).apply();
     }

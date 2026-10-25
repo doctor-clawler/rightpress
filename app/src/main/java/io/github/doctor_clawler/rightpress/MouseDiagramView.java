@@ -39,7 +39,7 @@ public final class MouseDiagramView extends View {
 
     public MouseDiagramView(Context context) {
         super(context);
-        setContentDescription("우클릭 동작 변경");
+        setContentDescription(context.getString(R.string.change_right_click_action));
         setFocusable(true);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
         createPaths();

@@ -3,26 +3,34 @@ package io.github.doctor_clawler.rightpress;
 import android.app.Activity;
 import android.app.Dialog;
 import android.app.Instrumentation;
+import android.app.LocaleManager;
+import android.app.LocaleConfig;
 import android.app.UiAutomation;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Context;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ResolveInfo;
+import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.graphics.Bitmap;
 import android.os.Bundle;
+import android.os.LocaleList;
 import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.test.InstrumentationTestCase;
+import android.text.Layout;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -38,6 +46,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
@@ -57,6 +66,7 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
     private EditText editor;
     private ScrollView scrollTarget;
     private String emulatorKeyboard;
+    private LocaleList originalAppLocales;
     private final AtomicInteger clicks = new AtomicInteger();
     private final AtomicInteger longClicks = new AtomicInteger();
     private final AtomicInteger leakedR = new AtomicInteger();
@@ -74,6 +84,11 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
     @Override protected void setUp() throws Exception {
         super.setUp();
         instrumentation = getInstrumentation();
+        LocaleManager localeManager = instrumentation.getTargetContext().getSystemService(LocaleManager.class);
+        originalAppLocales = localeManager.getApplicationLocales();
+        // Legacy UI regressions intentionally assert Korean copy. Use only this
+        // app's locale override, leaving the emulator's system language untouched.
+        setAppLocales(LocaleList.forLanguageTags("ko"));
         automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
         assertNotNull("UiAutomation must preserve the installed accessibility service", automation);
         // Hardware keyboard tests leave the system in navigation focus mode.
@@ -87,6 +102,7 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
         // The production app can record this receipt only from its affirmative button.
         assertTrue(AccessibilityConsent.accept(instrumentation.getTargetContext()));
         launchActivity();
+        waitForAppLanguage("ko");
         instrumentation.runOnMainSync(() -> service = MouseLongPressService.getInstance());
         // am instrument force-stops the target process first. An enabled accessibility
         // service can consequently remain in AccessibilityManager's crashed set until
@@ -115,7 +131,11 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
                 .putBoolean("keyboard_enabled", true).putString("mouse_action", ActionCatalog.LONG_PRESS)
                 .remove("shortcut_rules").commit();
         }
-        super.tearDown();
+        try {
+            if (originalAppLocales != null) setAppLocales(originalAppLocales);
+        } finally {
+            super.tearDown();
+        }
     }
 
     public void testConsentCancelAndBackDoNotAcceptOrOpenSettings() throws Exception {
@@ -139,6 +159,160 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
         } finally {
             instrumentation.removeMonitor(monitor);
             assertTrue(AccessibilityConsent.accept(instrumentation.getTargetContext()));
+        }
+    }
+
+    public void testLocalizedResourcesPreserveRulesAndFallbackToEnglish() {
+        Context context = instrumentation.getTargetContext();
+        ShortcutStore store = shortcutStore();
+        store.upsert(new ShortcutRule("locale_stable", KeyEvent.KEYCODE_K, CTRL_ALT,
+                ActionCatalog.TOGGLE_MOUSE, null, false));
+        store.setMouseAction(ActionCatalog.HOME);
+        Map<String, ?> before = context.getSharedPreferences("settings", Context.MODE_PRIVATE).getAll();
+        LocaleConfig config = new LocaleConfig(context);
+        assertEquals("The Android language picker must receive a valid generated locale list",
+                LocaleConfig.STATUS_SUCCESS, config.getStatus());
+        LocaleList supported = config.getSupportedLocales();
+        assertNotNull(supported);
+        assertTrue("The language list must expose the multilingual resources", supported.size() > 1);
+        boolean sawArabic = false;
+        boolean sawTraditionalChinese = false;
+        for (int i = 0; i < supported.size(); i++) {
+            Locale locale = supported.get(i);
+            Context translated = localizedContext(locale.toLanguageTag());
+            assertFalse("Every advertised locale needs readable consent", translated.getString(R.string.consent_body).isBlank());
+            assertFalse("Every advertised locale needs a stop control", translated.getString(R.string.stop_mouse).isBlank());
+            assertEquals(ActionCatalog.HOME, new ShortcutStore(translated).getMouseAction());
+            ShortcutRule rule = ruleById(new ShortcutStore(translated), "locale_stable");
+            assertNotNull(rule);
+            assertEquals(ActionCatalog.TOGGLE_MOUSE, rule.actionId);
+            assertEquals(KeyEvent.KEYCODE_K, rule.keyCode);
+            assertEquals(CTRL_ALT, rule.modifiers);
+            assertFalse(rule.enabled);
+            assertEquals("Reading a translated store must never rewrite settings", before,
+                    context.getSharedPreferences("settings", Context.MODE_PRIVATE).getAll());
+            sawArabic |= locale.getLanguage().equals("ar");
+            sawTraditionalChinese |= locale.getLanguage().equals("zh") && locale.getScript().equals("Hant");
+        }
+        assertTrue("Arabic must be available", sawArabic);
+        assertTrue("Traditional Chinese must be available alongside Simplified Chinese", sawTraditionalChinese);
+
+        Context english = localizedContext("en");
+        Context korean = localizedContext("ko");
+        Context arabic = localizedContext("ar");
+        Context unsupported = localizedContext("zz");
+        assertEquals("Home", ActionCatalog.title(english, ActionCatalog.HOME));
+        assertEquals("홈", ActionCatalog.title(korean, ActionCatalog.HOME));
+        assertFalse("The Arabic consent must not fall back to English",
+                english.getString(R.string.consent_body).equals(arabic.getString(R.string.consent_body)));
+        assertEquals("An unsupported language must use the English default",
+                english.getString(R.string.consent_body), unsupported.getString(R.string.consent_body));
+        assertEquals(View.LAYOUT_DIRECTION_RTL, arabic.getResources().getConfiguration().getLayoutDirection());
+        assertEquals(View.LAYOUT_DIRECTION_LTR, english.getResources().getConfiguration().getLayoutDirection());
+        assertEquals(arabic.getString(R.string.error_reserved_chord),
+                ShortcutStore.validateChord(arabic, KeyEvent.KEYCODE_R, CTRL_ALT));
+        assertEquals("Ctrl+Alt+K", ShortcutStore.chordLabel(KeyEvent.KEYCODE_K, CTRL_ALT));
+    }
+
+    public void testAppLanguageSwitchPreservesSettingsAndRefreshesActiveService() throws IOException {
+        Context context = instrumentation.getTargetContext();
+        ShortcutStore store = shortcutStore();
+        store.upsert(new ShortcutRule("language_switch", KeyEvent.KEYCODE_K, CTRL_ALT,
+                ActionCatalog.LAUNCH_APP, "com.android.settings", false));
+        store.setMouseAction(ActionCatalog.HOME);
+        store.setKeyboardEnabled(false);
+        setMode(true);
+        Map<String, ?> settings = context.getSharedPreferences("settings", Context.MODE_PRIVATE).getAll();
+        Map<String, ?> consent = context.getSharedPreferences(AccessibilityConsent.PREFERENCES, Context.MODE_PRIVATE).getAll();
+        for (String tag : new String[]{"ko", "ar", "en"}) {
+            AppLanguage.apply(context, tag);
+            launchActivity();
+            waitForAppLanguage(tag);
+            assertEquals(tag, AppLanguage.currentTag(context));
+            assertEquals(tag.equals("ar") ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR,
+                    activity.getWindow().getDecorView().getLayoutDirection());
+            assertTrue("The activity must use the selected navigation label",
+                    containsText(localizedContext(tag).getString(R.string.nav_mouse)));
+            assertServiceLanguage(tag, "active language selection");
+            if (!tag.equals("en")) {
+                reconnectService();
+                assertServiceLanguage(tag, "service reconnection");
+                assertEquals("Reconnecting must not change the selected app language", tag, AppLanguage.currentTag(context));
+            }
+            assertTrue("Language switching must preserve the active mouse mode", modeEnabled());
+            assertTrue("Language switching must keep the capture overlay attached", captureOverlayAttached());
+            assertEquals("Language switching must preserve all input settings", settings,
+                    context.getSharedPreferences("settings", Context.MODE_PRIVATE).getAll());
+            assertEquals("Language switching must not clear or silently renew consent", consent,
+                    context.getSharedPreferences(AccessibilityConsent.PREFERENCES, Context.MODE_PRIVATE).getAll());
+            if (tag.equals("ar")) {
+                assertAccessibleOverlayStop(tag);
+                Map<String, Object> stopped = new java.util.HashMap<>(settings);
+                stopped.put("mode_enabled", false);
+                assertEquals("The accessible Stop action may change only the mouse mode", stopped,
+                        context.getSharedPreferences("settings", Context.MODE_PRIVATE).getAll());
+                assertEquals(consent, context.getSharedPreferences(AccessibilityConsent.PREFERENCES, Context.MODE_PRIVATE).getAll());
+                setMode(true);
+            }
+        }
+        AppLanguage.apply(context, "");
+        assertTrue("System default must clear only this app's language override",
+                context.getSystemService(LocaleManager.class).getApplicationLocales().isEmpty());
+        assertEquals(settings, context.getSharedPreferences("settings", Context.MODE_PRIVATE).getAll());
+    }
+
+    public void testArabicConsentRequiresAffirmativeAction() {
+        Context context = instrumentation.getTargetContext();
+        AppLanguage.apply(context, "ar");
+        launchActivity();
+        waitForAppLanguage("ar");
+        Context arabic = localizedContext("ar");
+        clearConsent();
+        Map<String, ?> settings = context.getSharedPreferences("settings", Context.MODE_PRIVATE).getAll();
+        Instrumentation.ActivityMonitor monitor = blockAccessibilitySettings();
+        try {
+            uiClickText(arabic.getString(R.string.help));
+            uiClickText(arabic.getString(R.string.accessibility_settings));
+            uiAssertText(arabic.getString(R.string.consent_title));
+            assertFalse(AccessibilityConsent.isAccepted(context));
+            uiClickText(arabic.getString(R.string.cancel));
+            assertFalse("Localized Cancel must not accept consent", AccessibilityConsent.isAccepted(context));
+            assertEquals(0, monitor.getHits());
+            uiClickText(arabic.getString(R.string.help));
+            uiClickText(arabic.getString(R.string.accessibility_settings));
+            uiClickText(arabic.getString(R.string.consent_accept));
+            assertTrue("Localized Agree must record the same consent version", AccessibilityConsent.isAccepted(context));
+            assertEquals("The translated flow must open accessibility settings exactly once", 1, monitor.getHits());
+            assertEquals("A translated consent flow must preserve input settings", settings,
+                    context.getSharedPreferences("settings", Context.MODE_PRIVATE).getAll());
+        } finally {
+            instrumentation.removeMonitor(monitor);
+            assertTrue(AccessibilityConsent.accept(context));
+        }
+    }
+
+    public void testAllSupportedLocalesKeepMainControlsReadable() throws IOException {
+        Context context = instrumentation.getTargetContext();
+        List<String> supported = AppLanguage.supportedTags(context);
+        assertFalse("Generated language configuration must not be empty", supported.isEmpty());
+        Map<String, ?> settings = context.getSharedPreferences("settings", Context.MODE_PRIVATE).getAll();
+        Map<String, ?> consent = context.getSharedPreferences(AccessibilityConsent.PREFERENCES, Context.MODE_PRIVATE).getAll();
+        for (String tag : supported) {
+            AppLanguage.apply(context, tag);
+            launchActivity();
+            waitForAppLanguage(tag);
+            waitForActivityLayout();
+            assertMainTextGeometry(tag + "/mouse");
+            captureLocaleUi(tag, "mouse");
+            uiClickText(activity.getString(R.string.nav_keyboard));
+            waitForActivityLayout();
+            uiAssertText(activity.getString(R.string.add_shortcut_button));
+            assertMainTextGeometry(tag + "/keyboard");
+            captureLocaleUi(tag, "keyboard");
+            assertEquals("Viewing another language must not rewrite input settings: " + tag, settings,
+                    context.getSharedPreferences("settings", Context.MODE_PRIVATE).getAll());
+            assertEquals("Viewing another language must not change consent: " + tag, consent,
+                    context.getSharedPreferences(AccessibilityConsent.PREFERENCES, Context.MODE_PRIVATE).getAll());
         }
     }
 
@@ -874,7 +1048,7 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
         uiClickText("키 조합 입력");
         uiAssertText("키 조합 입력 중…");
         hardwareChord(37); // Ctrl+Alt+K
-        uiAssertText("Ctrl+Alt+K  ·  다시 입력");
+        uiAssertText(activity.getString(R.string.record_chord_again, "Ctrl+Alt+K"));
         uiClickText("저장");
         ShortcutRule added = ruleByChord(KeyEvent.KEYCODE_K);
         assertNotNull("Saving the recorder must create a real persisted rule", added);
@@ -883,9 +1057,9 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
 
         uiClickText("Ctrl+Alt+K, 뒤로, 편집");
         uiAssertText("단축키 편집");
-        uiClickText("Ctrl+Alt+K  ·  다시 입력");
+        uiClickText(activity.getString(R.string.record_chord_again, "Ctrl+Alt+K"));
         hardwareChord(36); // Ctrl+Alt+J
-        uiAssertText("Ctrl+Alt+J  ·  다시 입력");
+        uiAssertText(activity.getString(R.string.record_chord_again, "Ctrl+Alt+J"));
         uiClickText("뒤로  ›");
         uiClickText("마우스 변환 켜기/끄기");
         uiClickText("저장");
@@ -909,7 +1083,7 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
         uiClickText("＋ 단축키 추가");
         uiClickText("키 조합 입력");
         hardwareChord(48); // Ctrl+Alt+B already maps to BACK: recording must suppress it.
-        uiAssertText("Ctrl+Alt+B  ·  다시 입력");
+        uiAssertText(activity.getString(R.string.record_chord_again, "Ctrl+Alt+B"));
         uiClickText("저장");
         uiAssertText("이미 등록된 조합 · 꺼진 단축키 포함");
         uiAssertText("단축키 추가");
@@ -937,7 +1111,7 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
         uiClickText("＋ 단축키 추가");
         uiClickText("키 조합 입력");
         hardwareChord(37);
-        uiAssertText("Ctrl+Alt+K  ·  다시 입력");
+        uiAssertText(activity.getString(R.string.record_chord_again, "Ctrl+Alt+K"));
         uiClickText("뒤로  ›");
         uiClickText("앱 실행");
         uiClickText("실행할 앱 선택  ›");
@@ -1044,6 +1218,205 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
         } finally { screenshot.recycle(); }
     }
 
+    private void waitForActivityLayout() {
+        long deadline = SystemClock.uptimeMillis() + 3000;
+        AtomicReference<Boolean> ready = new AtomicReference<>(false);
+        do {
+            instrumentation.waitForIdleSync();
+            instrumentation.runOnMainSync(() -> {
+                View content = activity.findViewById(android.R.id.content);
+                ready.set(content.isLaidOut() && !content.isLayoutRequested()
+                        && content.getWidth() > 0 && content.getHeight() > 0);
+            });
+            if (ready.get()) return;
+            SystemClock.sleep(20);
+        } while (SystemClock.uptimeMillis() < deadline);
+        assertTrue("The activity must complete layout before geometry inspection", ready.get());
+    }
+
+    private void assertMainTextGeometry(String screen) {
+        try {
+            instrumentation.runOnMainSync(() -> {
+                int inspected = assertTextGeometry(activity.findViewById(android.R.id.content), screen);
+                assertTrue(screen + ": expected populated application controls", inspected >= 5);
+            });
+        } catch (AssertionError failure) {
+            captureUiFailure();
+            throw failure;
+        }
+    }
+
+    private int assertTextGeometry(View view, String screen) {
+        // Ignore hidden tabs, but inspect children beyond a ScrollView viewport:
+        // scrolling is intentional; clipping within each text control is not.
+        if (view.getVisibility() != View.VISIBLE) return 0;
+        int inspected = 0;
+        if (view instanceof TextView) {
+            TextView text = (TextView) view;
+            if (text.getText().length() > 0) {
+                String message = screen + ": " + text.getText();
+                assertTrue(message + " has no measured area", text.getWidth() > 0 && text.getHeight() > 0);
+                Layout layout = text.getLayout();
+                assertNotNull(message + " has no text layout", layout);
+                float epsilon = 2 * text.getResources().getDisplayMetrics().density;
+                int width = text.getWidth() - text.getCompoundPaddingLeft() - text.getCompoundPaddingRight();
+                int height = text.getHeight() - text.getCompoundPaddingTop() - text.getCompoundPaddingBottom();
+                assertTrue(message + " is vertically clipped: " + layout.getHeight() + " > " + height,
+                        layout.getHeight() <= height + epsilon);
+                for (int line = 0; line < layout.getLineCount(); line++) {
+                    assertEquals(message + " is ellipsized", 0, layout.getEllipsisCount(line));
+                    // getLineMax excludes trailing whitespace unlike getLineWidth.
+                    assertTrue(message + " is horizontally clipped on line " + line + ": "
+                                    + layout.getLineMax(line) + " > " + width,
+                            layout.getLineMax(line) <= width + epsilon);
+                }
+                inspected++;
+            }
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) inspected += assertTextGeometry(group.getChildAt(i), screen);
+        }
+        return inspected;
+    }
+
+    private void captureLocaleUi(String tag, String tab) throws IOException {
+        assertTrue("Locale filename must be a language tag", tag.matches("[A-Za-z0-9-]+"));
+        long focusDeadline = SystemClock.uptimeMillis() + 5000;
+        while (!activityHasFocus() && SystemClock.uptimeMillis() < focusDeadline) SystemClock.sleep(30);
+        assertTrue("The locale screenshot must show the focused activity", activityHasFocus());
+        // startActivitySync/layout completion can precede the window transition.
+        // Let its fade finish before recording visual evidence.
+        SystemClock.sleep(400);
+        Bitmap screenshot = automation.takeScreenshot();
+        assertNotNull("Capture the rendered " + tag + "/" + tab + " screen", screenshot);
+        File file = new File(instrumentation.getTargetContext().getCacheDir(), "l10n-" + tag + "-" + tab + ".png");
+        try (FileOutputStream output = new FileOutputStream(file)) {
+            assertTrue("Save locale screenshot", screenshot.compress(Bitmap.CompressFormat.PNG, 100, output));
+        } finally { screenshot.recycle(); }
+    }
+
+    private void assertServiceLanguage(String tag, String phase) {
+        long deadline = SystemClock.uptimeMillis() + 5000;
+        AtomicReference<String> serviceLanguage = new AtomicReference<>();
+        AtomicReference<String> overlayLabel = new AtomicReference<>();
+        do {
+            instrumentation.runOnMainSync(() -> {
+                service = MouseLongPressService.getInstance();
+                if (service != null) {
+                    serviceLanguage.set(service.getResources().getConfiguration().getLocales().get(0).toLanguageTag());
+                    Object overlay = serviceFieldOnMain("overlay");
+                    if (overlay instanceof View) overlayLabel.set(String.valueOf(((View) overlay).getContentDescription()));
+                }
+            });
+            if (tag.equals(serviceLanguage.get())
+                    && localizedContext(tag).getString(R.string.stop_mouse).equals(overlayLabel.get())) break;
+            SystemClock.sleep(30);
+        } while (SystemClock.uptimeMillis() < deadline);
+        assertEquals("Service resources must retain the app locale after " + phase, tag, serviceLanguage.get());
+        assertEquals("The actual stop control must retain the app locale after " + phase,
+                localizedContext(tag).getString(R.string.stop_mouse), overlayLabel.get());
+    }
+
+    private void assertAccessibleOverlayStop(String tag) {
+        AccessibilityServiceInfo automationInfo = automation.getServiceInfo();
+        int originalFlags = automationInfo.flags;
+        automationInfo.flags |= AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
+        automation.setServiceInfo(automationInfo);
+        AccessibilityNodeInfo stop = null;
+        Rect windowBounds = new Rect();
+        String label = localizedContext(tag).getString(R.string.stop_mouse);
+        try {
+            long deadline = SystemClock.uptimeMillis() + 5000;
+            do {
+                List<AccessibilityWindowInfo> windows = automation.getWindows();
+                try {
+                    for (AccessibilityWindowInfo window : windows) {
+                        if (window.getType() != AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) continue;
+                        AccessibilityNodeInfo root = window.getRoot();
+                        if (root == null) continue;
+                        try { stop = findAccessibleDescription(root, label); }
+                        finally { root.recycle(); }
+                        if (stop != null) { window.getBoundsInScreen(windowBounds); break; }
+                    }
+                } finally { for (AccessibilityWindowInfo window : windows) window.recycle(); }
+                if (stop != null) break;
+                SystemClock.sleep(50);
+            } while (SystemClock.uptimeMillis() < deadline);
+            assertNotNull("The localized stop control must be exposed to accessibility", stop);
+            assertEquals(Button.class.getName(), String.valueOf(stop.getClassName()));
+            assertTrue("The stop node must be visible and clickable", stop.isVisibleToUser() && stop.isClickable());
+            Rect bounds = new Rect();
+            stop.getBoundsInScreen(bounds);
+            assertFalse("The stop node must have a visible hit area", bounds.isEmpty());
+            AtomicReference<String> actualOverlay = new AtomicReference<>();
+            instrumentation.runOnMainSync(() -> {
+                View overlay = (View) serviceFieldOnMain("overlay");
+                int[] location = new int[2];
+                overlay.getLocationOnScreen(location);
+                int[] inWindow = new int[2];
+                overlay.getLocationInWindow(inWindow);
+                Rect globalVisible = new Rect();
+                overlay.getGlobalVisibleRect(globalVisible);
+                AccessibilityNodeInfo localNode = overlay.createAccessibilityNodeInfo();
+                int windowId = localNode.getWindowId();
+                localNode.recycle();
+                actualOverlay.set("view=" + overlay.getWidth() + "x" + overlay.getHeight()
+                        + " location=" + location[0] + "," + location[1] + " visible=" + globalVisible
+                        + " inWindow=" + inWindow[0] + "," + inWindow[1]
+                        + " safeInsets=" + ((CaptureOverlay) overlay).safeInsets()
+                        + " display=" + service.getSystemService(WindowManager.class).getMaximumWindowMetrics().getBounds()
+                        + " windowId=" + windowId);
+            });
+            Rect nodeInWindow = new Rect();
+            stop.getBoundsInWindow(nodeInWindow);
+            String geometry = "node=" + bounds + " window=" + windowBounds + " " + actualOverlay.get()
+                    + " nodeInWindow=" + nodeInWindow + " nodeWindowId=" + stop.getWindowId();
+            // AOSP reports this 800x1280 window as (0,0)-(799,1279), while
+            // View/AccessibilityNodeInfo use exclusive edges (0,0)-(800,1280).
+            // Allow that observed one physical-pixel boundary discrepancy only.
+            Rect reportedWindowWithRounding = new Rect(windowBounds);
+            reportedWindowWithRounding.inset(-1, -1);
+            assertTrue("The stop node must be inside the overlay window (1px reporting tolerance): " + geometry,
+                    reportedWindowWithRounding.contains(bounds));
+            assertEquals("In-window bounds must describe the same button width: " + geometry,
+                    bounds.width(), nodeInWindow.width());
+            assertEquals("In-window bounds must describe the same button height: " + geometry,
+                    bounds.height(), nodeInWindow.height());
+            assertTrue("The stop node must describe the button, not the full-screen input overlay",
+                    bounds.width() < windowBounds.width() && bounds.height() < windowBounds.height() / 2);
+            assertTrue("The escape control stays at the physical top-right even in RTL",
+                    bounds.centerX() > windowBounds.centerX() && bounds.centerY() < windowBounds.centerY());
+            assertTrue("The stop node must provide ACTION_CLICK",
+                    stop.getActionList().contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK));
+            assertTrue("The accessible stop action must be accepted", stop.performAction(AccessibilityNodeInfo.ACTION_CLICK));
+            waitForMode(false, 3000);
+            assertFalse("Accessibility ACTION_CLICK must stop mouse conversion", modeEnabled());
+            assertFalse("The stop action must remove the capture overlay", captureOverlayAttached());
+            assertFalse("The stop action must persist mouse OFF", savedMode());
+        } finally {
+            if (stop != null) stop.recycle();
+            AccessibilityServiceInfo restored = automation.getServiceInfo();
+            restored.flags = originalFlags;
+            automation.setServiceInfo(restored);
+        }
+    }
+
+    private AccessibilityNodeInfo findAccessibleDescription(AccessibilityNodeInfo node, String description) {
+        if (description.contentEquals(node.getContentDescription() == null ? "" : node.getContentDescription())) {
+            return AccessibilityNodeInfo.obtain(node);
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child == null) continue;
+            try {
+                AccessibilityNodeInfo match = findAccessibleDescription(child, description);
+                if (match != null) return match;
+            } finally { child.recycle(); }
+        }
+        return null;
+    }
+
     /** Resolves the current real window, including dialogs, without private UI fields. */
     private Rect uiTextBounds(String value, boolean reveal) {
         AccessibilityNodeInfo root = automation.getRootInActiveWindow();
@@ -1142,6 +1515,45 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
         while (modeEnabled() != expected && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(30);
     }
 
+    private void setAppLocales(LocaleList locales) {
+        Context context = instrumentation.getTargetContext();
+        context.getSystemService(LocaleManager.class).setApplicationLocales(locales);
+        long deadline = SystemClock.uptimeMillis() + 5000;
+        do {
+            instrumentation.waitForIdleSync();
+            boolean overrideStored = locales.equals(context.getSystemService(LocaleManager.class).getApplicationLocales());
+            if (overrideStored) return;
+            SystemClock.sleep(30);
+        } while (SystemClock.uptimeMillis() < deadline);
+        assertEquals("The app language override must persist", locales,
+                context.getSystemService(LocaleManager.class).getApplicationLocales());
+    }
+
+    private void waitForAppLanguage(String languageTag) {
+        // The instrumentation target Context can retain the system locale even
+        // while the actual activity correctly uses its application override.
+        // Verify the rendered activity after launch, not that stale test Context.
+        long deadline = SystemClock.uptimeMillis() + 5000;
+        AtomicReference<Locale> actual = new AtomicReference<>();
+        do {
+            instrumentation.waitForIdleSync();
+            instrumentation.runOnMainSync(() -> actual.set(activity.getResources().getConfiguration().getLocales().get(0)));
+            if (Locale.forLanguageTag(languageTag).equals(actual.get())) return;
+            SystemClock.sleep(30);
+        } while (SystemClock.uptimeMillis() < deadline);
+        assertEquals("The visible activity resources must use the selected app language",
+                Locale.forLanguageTag(languageTag), actual.get());
+    }
+
+    private Context localizedContext(String languageTag) {
+        Context context = instrumentation.getTargetContext();
+        Configuration configuration = new Configuration(context.getResources().getConfiguration());
+        Locale locale = Locale.forLanguageTag(languageTag);
+        configuration.setLocales(new LocaleList(locale));
+        configuration.setLayoutDirection(locale);
+        return context.createConfigurationContext(configuration);
+    }
+
     private void launchActivity() {
         Intent intent = new Intent(instrumentation.getTargetContext(), MainActivity.class);
         // A null action passes IntentFilter's action check and would let the
@@ -1184,12 +1596,19 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
             }
             long deadline = SystemClock.uptimeMillis() + 5000;
             AtomicReference<MouseLongPressService> remaining = new AtomicReference<>();
+            boolean systemStillEnabled;
             do {
                 instrumentation.runOnMainSync(() -> remaining.set(MouseLongPressService.getInstance()));
-                if (remaining.get() == null) break;
+                // After am instrument force-stops the app, the singleton is already
+                // null. That alone does not prove the system consumed our OFF edge:
+                // restoring immediately can coalesce both settings notifications.
+                systemStillEnabled = isServiceEnabledByAccessibilityManager(expected);
+                if (remaining.get() == null && !systemStillEnabled) break;
                 SystemClock.sleep(50);
             } while (SystemClock.uptimeMillis() < deadline);
             assertNull("The exact service must disconnect before the fixture restores it", remaining.get());
+            assertFalse("AccessibilityManager must observe the service disabled before the fixture restores it",
+                    systemStillEnabled);
         } finally {
             // Preserve all other enabled services and restore the exact original list.
             shell("settings put secure enabled_accessibility_services " + originalServices);
@@ -1201,6 +1620,23 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
         }
         if (expectAccepted) assertEquals("The fixture must restore the enabled accessibility service list",
             originalServices, shell("settings get secure enabled_accessibility_services").trim());
+    }
+
+    private boolean isServiceEnabledByAccessibilityManager(ComponentName component) throws IOException {
+        // Android's public getEnabledAccessibilityServiceList reports bound
+        // services, excluding the crashed/unbound service we need to rebind.
+        // On this disposable AOSP fixture, dumpsys exposes the server's actual
+        // enabled set after its asynchronous Settings observer has processed it.
+        Matcher enabled = Pattern.compile("(?m)^\\s*Enabled services:\\{(.*)\\}\\s*$")
+                .matcher(shell("dumpsys accessibility"));
+        boolean foundState = false;
+        boolean foundComponent = false;
+        while (enabled.find()) {
+            foundState = true;
+            foundComponent |= enabled.group(1).contains(component.toShortString());
+        }
+        assertTrue("The AOSP fixture must expose AccessibilityManager's enabled-service state", foundState);
+        return foundComponent;
     }
 
     private String shell(String command) throws IOException {
@@ -1274,6 +1710,11 @@ public final class RightPressInstrumentationTest extends InstrumentationTestCase
                 }
             };
             editor.setSingleLine(true);
+            // These fixtures assert physical A/B edges produce ASCII text. The
+            // app-only Korean UI locale must not switch this probe to Hangul IME
+            // composition; this changes only the temporary editor, not system IME settings.
+            editor.setImeHintLocales(LocaleList.forLanguageTags("en"));
+            editor.setImeOptions(editor.getImeOptions() | EditorInfo.IME_FLAG_FORCE_ASCII);
             editor.setShowSoftInputOnFocus(false);
             editor.setHint("Hardware keyboard input target");
             root.addView(editor, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64)));

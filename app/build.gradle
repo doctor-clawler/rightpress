@@ -24,8 +24,8 @@ android {
         applicationId 'io.github.doctor_clawler.rightpress'
         minSdk 34
         targetSdk 35
-        versionCode 7
-        versionName '0.5.0-beta.1'
+        versionCode 8
+        versionName '0.6.0-beta.1'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
 
@@ -46,6 +46,18 @@ android {
         }
     }
     testBuildType System.getenv('RIGHTPRESS_TEST_BUILD_TYPE') ?: 'debug'
+
+    // New values-*/strings.xml files automatically appear in Android's app-language settings.
+    androidResources {
+        generateLocaleConfig true
+    }
+
+    // Keep the in-app language picker fully offline in APKs and future app bundles.
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

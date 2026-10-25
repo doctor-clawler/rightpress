@@ -24,7 +24,7 @@
             android:name=".MouseLongPressService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true"
-            android:label="RightPress 입력 도우미"
+            android:label="@string/service_name"
             android:description="@string/accessibility_description">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

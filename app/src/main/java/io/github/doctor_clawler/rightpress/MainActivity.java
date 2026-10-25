@@ -56,6 +56,7 @@ public final class MainActivity extends Activity {
     private boolean refreshing;
     private Editor editor;
     private AlertDialog consentDialog;
+    private AlertDialog languageDialog;
     private final BroadcastReceiver stateReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) { refresh(); }
     };
@@ -87,22 +88,74 @@ public final class MainActivity extends Activity {
         else outer.addView(workspace, new LinearLayout.LayoutParams(-1, 0, 1));
 
         LinearLayout brand = column();
-        brand.addView(text("RightPress", tablet ? 34 : 30, INK, true));
-        TextView edition = mono("INPUT CONSOLE", 14, MUTED);
-        edition.setLetterSpacing(.14f);
+        // The escape control stays at the physical top-right in every locale.
+        brand.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
+        TextView brandTitle = text(getString(R.string.app_name), tablet ? 34 : 30, INK, true);
+        brand.addView(brandTitle);
+        TextView edition = mono(getString(R.string.input_console), 14, MUTED);
+        edition.setLetterSpacing(getResources().getConfiguration().getLayoutDirection() == View.LAYOUT_DIRECTION_RTL ? 0 : .14f);
         brand.addView(edition);
         // Reserve the overlay exit's top-right hit region; all controls begin below it.
-        brand.setMinimumHeight(dp(CaptureOverlay.EXIT_TOUCH_HEIGHT_DP - 12));
+        brand.setMinimumHeight(CaptureOverlay.exitTouchHeight(this, getResources().getDisplayMetrics().widthPixels) - dp(12));
+        brand.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            android.view.WindowMetrics metrics = getWindowManager().getCurrentWindowMetrics();
+            android.graphics.Rect window = metrics.getBounds();
+            Insets safe = metrics.getWindowInsets().getInsetsIgnoringVisibility(
+                    WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+            int captureWidth = Math.max(1, window.width() - safe.left - safe.right);
+            int exitRight = window.right - safe.right;
+            int exitLeft = exitRight - CaptureOverlay.exitTouchWidth(this, captureWidth);
+            int exitBottom = window.top + safe.top + CaptureOverlay.exitTouchHeight(this, captureWidth);
+            int[] position = new int[2];
+            brand.getLocationOnScreen(position);
+            float textLeft = Float.POSITIVE_INFINITY, textRight = Float.NEGATIVE_INFINITY;
+            for (TextView label : new TextView[]{brandTitle, edition}) {
+                android.text.Layout layout = label.getLayout();
+                if (layout == null) continue;
+                int[] glyphOrigin = new int[2];
+                label.getLocationOnScreen(glyphOrigin);
+                float originX = glyphOrigin[0] + label.getCompoundPaddingLeft() - label.getScrollX();
+                for (int line = 0; line < layout.getLineCount(); line++) {
+                    textLeft = Math.min(textLeft, originX + layout.getLineLeft(line));
+                    textRight = Math.max(textRight, originX + layout.getLineRight(line));
+                }
+            }
+            boolean intersects = textLeft < exitRight && textRight + dp(8) > exitLeft;
+            // Base the gap on the unpadded view origin, so relayout cannot oscillate.
+            // Keep it even with mouse mode off to avoid moving the page on each toggle.
+            int topGap = intersects ? Math.max(0, exitBottom - position[1]) : 0;
+            if (brand.getPaddingTop() != topGap) {
+                // Padding changes require a fresh measure pass. Applying them
+                // inside onLayout can reuse the old height and clip both labels.
+                brand.post(() -> {
+                    if (brand.isAttachedToWindow() && brand.getPaddingTop() != topGap) {
+                        brand.setPadding(0, topGap, 0, 0);
+                        brand.requestLayout();
+                    }
+                });
+            }
+        });
         workspace.addView(brand, fill());
         LinearLayout service = row();
-        connection = text("접근성 확인 중", 14, MUTED, false);
+        connection = text(getString(R.string.connection_checking), 14, MUTED, false);
         service.addView(connection, new LinearLayout.LayoutParams(0, -2, 1));
-        Button help = button("도움말", BG, MUTED);
+        Button language = button(getString(R.string.language_symbol), BG, BRIGHT);
+        String activeLanguage = AppLanguage.currentTag(this);
+        java.util.Locale languageLocale = java.util.Locale.forLanguageTag(activeLanguage);
+        language.setContentDescription(getString(R.string.language_current, activeLanguage.isEmpty()
+                ? getString(R.string.language_system) : languageLocale.getDisplayName(languageLocale)));
+        language.setTooltipText(getString(R.string.language_menu));
+        language.setMinWidth(0); language.setMinimumWidth(0);
+        language.setPadding(dp(6), dp(8), dp(6), dp(8));
+        language.setOnClickListener(v -> languageDialog = AppLanguage.showPicker(this));
+        service.addView(language, new LinearLayout.LayoutParams(dp(52), -2));
+        Button help = button(getString(R.string.help), BG, MUTED);
         help.setOnClickListener(v -> showHelp());
         help.setMinWidth(0); help.setMinimumWidth(0);
-        service.addView(help, new LinearLayout.LayoutParams(dp(76), dp(48)));
+        help.setMaxWidth(dp(132));
+        service.addView(help, new LinearLayout.LayoutParams(-2, -2));
         workspace.addView(service, fill());
-        setup = button("접근성 서비스 켜기", 0xFF2E63D6, Color.WHITE);
+        setup = button(getString(R.string.enable_accessibility), 0xFF2E63D6, Color.WHITE);
         setup.setOnClickListener(v -> openSettings());
         workspace.addView(setup, fill());
         divider(workspace);
@@ -129,23 +182,23 @@ public final class MainActivity extends Activity {
             nav.addView(mark, new LinearLayout.LayoutParams(dp(42), dp(42)));
             gap(nav, 44);
         }
-        mouseTab = navItem("마우스", "mouse", 0);
-        keyboardTab = navItem("키보드", "keyboard", 1);
+        mouseTab = navItem(getString(R.string.nav_mouse), "mouse", 0);
+        keyboardTab = navItem(getString(R.string.nav_keyboard), "keyboard", 1);
         if (tablet) {
-            nav.addView(mouseTab, new LinearLayout.LayoutParams(-1, dp(78)));
+            nav.addView(mouseTab, new LinearLayout.LayoutParams(-1, -2));
             gap(nav, 12);
-            nav.addView(keyboardTab, new LinearLayout.LayoutParams(-1, dp(78)));
+            nav.addView(keyboardTab, new LinearLayout.LayoutParams(-1, -2));
             nav.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1));
-            TextView version = mono("0.5", 14, MUTED); version.setGravity(Gravity.CENTER); nav.addView(version);
+            TextView version = mono("0.6", 14, MUTED); version.setGravity(Gravity.CENTER); nav.addView(version);
         } else {
-            nav.addView(mouseTab, new LinearLayout.LayoutParams(0, dp(72), 1));
-            nav.addView(keyboardTab, new LinearLayout.LayoutParams(0, dp(72), 1));
+            nav.addView(mouseTab, new LinearLayout.LayoutParams(0, -2, 1));
+            nav.addView(keyboardTab, new LinearLayout.LayoutParams(0, -2, 1));
         }
         return nav;
     }
 
     private LinearLayout navItem(String label, String symbol, int tab) {
-        LinearLayout item = column(); item.setGravity(Gravity.CENTER);
+        LinearLayout item = column(); item.setGravity(Gravity.CENTER); item.setMinimumHeight(dp(tablet ? 78 : 72)); item.setPadding(0, dp(8), 0, dp(8));
         ConsoleIconView icon = new ConsoleIconView(this, symbol);
         item.addView(icon, new LinearLayout.LayoutParams(dp(25), dp(25)));
         gap(item, 4);
@@ -191,11 +244,12 @@ public final class MainActivity extends Activity {
     private void sectionHeading(String section, String title, Switch control) {
         LinearLayout heading = row();
         LinearLayout label = column();
-        TextView index = mono(section, 14, MUTED); index.setLetterSpacing(.1f);
+        TextView index = mono(section, 14, MUTED); index.setLetterSpacing(getResources().getConfiguration().getLayoutDirection() == View.LAYOUT_DIRECTION_RTL ? 0 : .1f);
         label.addView(index); gap(label, 4);
         label.addView(text(title, tablet ? 26 : 23, INK, false));
         heading.addView(label, new LinearLayout.LayoutParams(0, -2, 1));
-        modeValue = mono("ON", 14, BRIGHT);
+        modeValue = text(getString(R.string.state_on), 14, BRIGHT, false);
+        modeValue.setMaxWidth(dp(80));
         LinearLayout.LayoutParams modePosition = new LinearLayout.LayoutParams(-2, -2);
         modePosition.setMargins(dp(8), 0, dp(12), 0);
         heading.addView(modeValue, modePosition);
@@ -204,8 +258,8 @@ public final class MainActivity extends Activity {
     }
 
     private void renderMouse() {
-        mouseSwitch = toggle("마우스 변환");
-        sectionHeading("01 / MOUSE", "마우스 변환", mouseSwitch);
+        mouseSwitch = toggle(getString(R.string.mouse_mode));
+        sectionHeading(getString(R.string.section_mouse), getString(R.string.mouse_mode), mouseSwitch);
         mouseStatus = text("", 14, MUTED, false);
         gap(content, 4); content.addView(mouseStatus);
         mouseSwitch.setOnCheckedChangeListener((v, enabled) -> {
@@ -226,7 +280,7 @@ public final class MainActivity extends Activity {
         int compactHeight = getResources().getConfiguration().fontScale > 1.15f ? 110 : 150;
         int diagramHeight = tablet ? (wide ? 280 : 370) : shortWindow ? compactHeight : 250;
         illustration.addView(mouseDiagram, new LinearLayout.LayoutParams(-1, dp(diagramHeight)));
-        TextView caption = text("오른쪽 버튼을 선택해 동작 변경", 14, MUTED, false);
+        TextView caption = text(getString(R.string.mouse_diagram_hint), 14, MUTED, false);
         caption.setGravity(Gravity.CENTER); illustration.addView(caption, fill());
         LinearLayout actionArea = column();
         String actionId = store.getMouseAction();
@@ -236,15 +290,15 @@ public final class MainActivity extends Activity {
             gap(actionArea, 20);
         }
         LinearLayout actionText = column();
-        actionText.addView(text("우클릭 동작", 14, MUTED, false));
+        actionText.addView(text(getString(R.string.right_click_action), 14, MUTED, false));
         gap(actionText, 6);
-        actionText.addView(text(ActionCatalog.title(actionId), tablet ? 30 : 25, INK, false));
-        Button change = button(tablet ? "동작 변경  ›" : "변경  ›", BG, BRIGHT);
-        change.setContentDescription("우클릭 동작 변경");
+        actionText.addView(text(ActionCatalog.title(MainActivity.this, actionId), tablet ? 30 : 25, INK, false));
+        Button change = button(tablet ? getString(R.string.change_action) + "  ›" : getString(R.string.change) + "  ›", BG, BRIGHT);
+        change.setContentDescription(getString(R.string.change_right_click_action));
         change.setOnClickListener(choose); change.setBackground(outlineBackground(BG));
         if (tablet) {
             actionArea.addView(actionText, fill()); gap(actionArea, 12);
-            actionArea.addView(text(ActionCatalog.LONG_PRESS.equals(actionId) ? "지원되는 요소는 누르는 순간 실행" : "누르는 순간 실행", 14, MUTED, false));
+            actionArea.addView(text(ActionCatalog.LONG_PRESS.equals(actionId) ? getString(R.string.instant_supported_hint) : getString(R.string.instant_action_hint), 14, MUTED, false));
             gap(actionArea, 24);
             actionArea.addView(change, new LinearLayout.LayoutParams(dp(175), -2));
             stage.addView(illustration, new LinearLayout.LayoutParams(0, -2, 1.2f));
@@ -260,14 +314,14 @@ public final class MainActivity extends Activity {
         content.addView(stage, fill());
         divider(content);
         if (ActionCatalog.LONG_PRESS.equals(actionId)) {
-            gap(content, 18); content.addView(text("세부 설정", 14, MUTED, false));
+            gap(content, 18); content.addView(text(getString(R.string.detailed_settings), 14, MUTED, false));
             LinearLayout settings = wide ? row() : column();
             LinearLayout instantArea = row(); instantArea.setPadding(0, dp(18), 0, dp(18));
             LinearLayout instantLabels = column();
-            instantLabels.addView(text("즉시 실행", 16, INK, false)); gap(instantLabels, 5);
-            instantLabels.addView(text("미지원 화면: 버튼을 뗀 뒤 터치", 14, MUTED, false));
+            instantLabels.addView(text(getString(R.string.instant_action), 16, INK, false)); gap(instantLabels, 5);
+            instantLabels.addView(text(getString(R.string.fallback_release_hint), 14, MUTED, false));
             instantArea.addView(instantLabels, new LinearLayout.LayoutParams(0, -2, 1));
-            Switch instant = toggle("우클릭 즉시 실행");
+            Switch instant = toggle(getString(R.string.instant_right_click));
             instant.setChecked(getSharedPreferences("settings", MODE_PRIVATE).getBoolean("instant_enabled", true));
             instant.setOnCheckedChangeListener((v, enabled) -> getSharedPreferences("settings", MODE_PRIVATE).edit().putBoolean("instant_enabled", enabled).apply());
             LinearLayout.LayoutParams switchPosition = new LinearLayout.LayoutParams(dp(56), dp(48)); switchPosition.setMarginStart(dp(12));
@@ -275,12 +329,12 @@ public final class MainActivity extends Activity {
             LinearLayout range = column(); range.setPadding(0, dp(20), 0, dp(20));
             TextView duration = mono("", 20, INK);
             range.addView(duration, fill()); gap(range, 4);
-            range.addView(text("터치로 대신 처리할 때 적용", 14, MUTED, false));
+            range.addView(text(getString(R.string.fallback_duration_hint), 14, MUTED, false));
             SeekBar seek = new SeekBar(this);
-            seek.setContentDescription("호환 터치 유지 시간"); seek.setMinHeight(dp(48)); seek.setPadding(dp(4), 0, dp(4), 0);
+            seek.setContentDescription(getString(R.string.fallback_duration_accessibility)); seek.setMinHeight(dp(48)); seek.setPadding(dp(4), 0, dp(4), 0);
             seek.setMax(16);
             seek.setProgress(Math.max(0, Math.min(16, (getSharedPreferences("settings", MODE_PRIVATE).getInt("press_ms", 650) - 400) / 50)));
-            duration.setText("호환 터치: " + (400 + seek.getProgress() * 50) + "ms");
+            duration.setText(getString(R.string.fallback_duration, 400 + seek.getProgress() * 50));
             seek.setProgressTintList(ColorStateList.valueOf(BLUE));
             seek.setProgressBackgroundTintList(ColorStateList.valueOf(LINE));
             GradientDrawable thumb = round(0xFFC4CAD3, 2);
@@ -288,7 +342,7 @@ public final class MainActivity extends Activity {
             seek.setThumb(thumb); seek.setThumbOffset(dp(8));
             seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
                 public void onProgressChanged(SeekBar bar, int value, boolean user) {
-                    int ms = 400 + value * 50; duration.setText("호환 터치: " + ms + "ms");
+                    int ms = 400 + value * 50; duration.setText(getString(R.string.fallback_duration, ms));
                     if (user) getSharedPreferences("settings", MODE_PRIVATE).edit().putInt("press_ms", ms).apply();
                 }
                 public void onStartTrackingTouch(SeekBar bar) { }
@@ -296,8 +350,8 @@ public final class MainActivity extends Activity {
             });
             range.addView(seek, fill());
             LinearLayout limits = row();
-            limits.addView(mono("400 ms", 14, MUTED), new LinearLayout.LayoutParams(0, -2, 1));
-            limits.addView(mono("1,200 ms", 14, MUTED)); range.addView(limits, fill());
+            limits.addView(mono(getString(R.string.duration_ms, 400), 14, MUTED), new LinearLayout.LayoutParams(0, -2, 1));
+            limits.addView(mono(getString(R.string.duration_ms, 1200), 14, MUTED)); range.addView(limits, fill());
             if (wide) {
                 settings.addView(instantArea, new LinearLayout.LayoutParams(0, -2, 1));
                 settings.addView(new View(this), new LinearLayout.LayoutParams(dp(42), 1));
@@ -307,16 +361,16 @@ public final class MainActivity extends Activity {
         }
         LinearLayout fixed = tablet ? row() : column(); fixed.setPadding(0, dp(20), 0, 0);
         LinearLayout fixedText = column();
-        fixedText.addView(text("마우스 변환 켜기 / 끄기", 16, INK, false)); gap(fixedText, 4);
-        fixedText.addView(text("키보드 단축키와 별도 작동", 14, MUTED, false));
+        fixedText.addView(text(getString(R.string.mouse_toggle), 16, INK, false)); gap(fixedText, 4);
+        fixedText.addView(text(getString(R.string.independent_keyboard_hint), 14, MUTED, false));
         if (tablet) fixed.addView(fixedText, new LinearLayout.LayoutParams(0, -2, 1));
         else { fixed.addView(fixedText, fill()); gap(fixed, 12); }
         fixed.addView(mono("Ctrl + Alt + R", 16, 0xFFC4CAD3)); content.addView(fixed, fill());
     }
 
     private void renderKeyboard() {
-        keyboardSwitch = toggle("키보드 단축키");
-        sectionHeading("02 / KEYBOARD", "키보드 단축키", keyboardSwitch);
+        keyboardSwitch = toggle(getString(R.string.keyboard_shortcuts));
+        sectionHeading(getString(R.string.section_keyboard), getString(R.string.keyboard_shortcuts), keyboardSwitch);
         keyboardSwitch.setOnCheckedChangeListener((v, checked) -> {
             if (!refreshing) { store.setKeyboardEnabled(checked); refresh(); }
         });
@@ -324,13 +378,14 @@ public final class MainActivity extends Activity {
         gap(content, 8); content.addView(keyboardStatus, fill()); gap(content, tablet ? 24 : 16);
         List<ShortcutRule> rules = store.load();
         LinearLayout tools = row();
-        tools.addView(text("단축키 · " + rules.size(), 16, INK, false), new LinearLayout.LayoutParams(0, -2, 1));
-        Button add = button("＋ 단축키 추가", 0xFF2E63D6, Color.WHITE);
-        add.setOnClickListener(v -> openEditor(null)); tools.addView(add);
+        tools.addView(text(getString(R.string.shortcut_count, rules.size()), 16, INK, false), new LinearLayout.LayoutParams(0, -2, 1));
+        Button add = button(getString(R.string.add_shortcut_button), 0xFF2E63D6, Color.WHITE);
+        add.setOnClickListener(v -> openEditor(null));
+        tools.addView(add, new LinearLayout.LayoutParams(0, -2, tablet ? .6f : 1.4f));
         content.addView(tools, fill()); gap(content, tablet ? 18 : 12); divider(content);
         if (rules.isEmpty()) {
-            gap(content, 28); content.addView(text("등록된 단축키 없음", 18, INK, false));
-            gap(content, 8); content.addView(text("Ctrl/Alt + 키 조합 등록", 14, MUTED, false)); gap(content, 28);
+            gap(content, 28); content.addView(text(getString(R.string.no_shortcuts), 18, INK, false));
+            gap(content, 8); content.addView(text(getString(R.string.create_chord_hint), 14, MUTED, false)); gap(content, 28);
         }
         int index = 0;
         for (ShortcutRule rule : rules) {
@@ -340,13 +395,13 @@ public final class MainActivity extends Activity {
             LinearLayout details = column(); details.setPadding(dp(4), dp(12), dp(8), dp(12)); details.setMinimumHeight(dp(tablet ? 80 : 74));
             details.addView(mono(ShortcutStore.chordLabel(rule.keyCode, rule.modifiers), tablet ? 24 : 20, rule.enabled ? INK : MUTED), fill());
             gap(details, 5); details.addView(text(ruleDescription(rule) + "  ›", 14, MUTED, false));
-            details.setContentDescription(ShortcutStore.chordLabel(rule.keyCode, rule.modifiers) + ", " + ruleDescription(rule) + ", 편집");
+            details.setContentDescription(getString(R.string.edit_shortcut_accessibility, bidi(ShortcutStore.chordLabel(rule.keyCode, rule.modifiers)), ruleDescription(rule)));
             details.setFocusable(true); details.setBackground(focusBackground(BG));
             details.setOnClickListener(v -> {
                 for (ShortcutRule current : store.load()) if (current.id.equals(rule.id)) { openEditor(current); break; }
             });
             item.addView(details, new LinearLayout.LayoutParams(0, -2, 1));
-            Switch enabled = toggle(ShortcutStore.chordLabel(rule.keyCode, rule.modifiers) + " 사용");
+            Switch enabled = toggle(getString(R.string.enable_shortcut_accessibility, bidi(ShortcutStore.chordLabel(rule.keyCode, rule.modifiers))));
             enabled.setChecked(rule.enabled);
             enabled.setOnCheckedChangeListener((v, checked) -> {
                 store.upsert(new ShortcutRule(rule.id, rule.keyCode, rule.modifiers, rule.actionId, rule.packageName, checked));
@@ -356,7 +411,7 @@ public final class MainActivity extends Activity {
             content.addView(item, fill()); divider(content);
         }
         gap(content, 24);
-        content.addView(text("• Ctrl+Alt+R: 마우스 변환 전용\n• 미등록 키: 원래대로 입력", 14, MUTED, false));
+        content.addView(text(getString(R.string.keyboard_footer), 14, MUTED, false));
     }
 
     private void refresh() {
@@ -364,21 +419,21 @@ public final class MainActivity extends Activity {
         MouseLongPressService svc = MouseLongPressService.getInstance();
         boolean connected = svc != null;
         refreshing = true;
-        connection.setText(connected ? "● 접근성 연결됨" : "○ 접근성 꺼짐");
+        connection.setText(connected ? getString(R.string.connection_on) : getString(R.string.connection_off));
         connection.setTextColor(connected ? BRIGHT : MUTED);
         setup.setVisibility(connected ? View.GONE : View.VISIBLE);
         if (mouseSwitch != null) {
             mouseSwitch.setChecked(connected && svc.isModeEnabled());
             mouseDiagram.setActive(mouseSwitch.isChecked());
-            modeValue.setText(mouseSwitch.isChecked() ? "ON" : "OFF");
+            modeValue.setText(mouseSwitch.isChecked() ? getString(R.string.state_on) : getString(R.string.state_off));
             modeValue.setTextColor(mouseSwitch.isChecked() ? BRIGHT : MUTED);
-            mouseStatus.setText(!connected ? "접근성 연결 필요" : svc.isModeEnabled() ? "마우스 변환 켜짐" : "마우스 변환 꺼짐");
+            mouseStatus.setText(!connected ? getString(R.string.connection_required) : svc.isModeEnabled() ? getString(R.string.mouse_on) : getString(R.string.mouse_off));
         }
         if (keyboardSwitch != null) {
             keyboardSwitch.setChecked(store.isKeyboardEnabled());
-            modeValue.setText(keyboardSwitch.isChecked() ? "ON" : "OFF");
+            modeValue.setText(keyboardSwitch.isChecked() ? getString(R.string.state_on) : getString(R.string.state_off));
             modeValue.setTextColor(keyboardSwitch.isChecked() ? BRIGHT : MUTED);
-            keyboardStatus.setText(!connected ? "설정 저장됨 · 실행은 접근성 연결 필요" : store.isKeyboardEnabled() ? "단축키 켜짐 · 마우스와 별도 작동" : "단축키 꺼짐 · Ctrl+Alt+R 사용 가능");
+            keyboardStatus.setText(!connected ? getString(R.string.keyboard_waiting) : store.isKeyboardEnabled() ? getString(R.string.keyboard_on) : getString(R.string.keyboard_off));
         }
         refreshing = false;
         if (editor != null && svc != null) svc.setShortcutRecording(editor.recording);
@@ -406,12 +461,12 @@ public final class MainActivity extends Activity {
             packageName = rule == null ? null : rule.packageName;
             LinearLayout form = column();
             form.setPadding(dp(16), dp(8), dp(16), dp(12));
-            form.addView(text("1  키 조합", 14, MUTED, true)); gap(form, 8);
+            form.addView(text(getString(R.string.editor_chord), 14, MUTED, true)); gap(form, 8);
             record = button("", 0xFF171B22, BRIGHT);
             form.addView(record, fill());
             hint = text("", 14, MUTED, false);
             form.addView(hint); gap(form, 12);
-            form.addView(text("2  동작", 14, MUTED, true)); gap(form, 8);
+            form.addView(text(getString(R.string.editor_action), 14, MUTED, true)); gap(form, 8);
             action = button("", SURFACE, INK);
             action.setOnClickListener(v -> { setRecording(false); update(); chooseAction(ActionCatalog.keyboardActions(), actionId, id -> { actionId = id; update(); }); });
             form.addView(action, fill()); gap(form, 8);
@@ -424,9 +479,9 @@ public final class MainActivity extends Activity {
             gap(form, 10); form.addView(error);
             ScrollView scroll = new ScrollView(MainActivity.this); scroll.addView(form);
             AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this)
-                    .setTitle(rule == null ? "단축키 추가" : "단축키 편집").setView(scroll)
-                    .setPositiveButton("저장", null).setNegativeButton("취소", null);
-            if (rule != null) builder.setNeutralButton("삭제", (d, which) -> { store.delete(rule.id); render(); });
+                    .setTitle(rule == null ? getString(R.string.add_shortcut) : getString(R.string.edit_shortcut)).setView(scroll)
+                    .setPositiveButton(getString(R.string.save), null).setNegativeButton(getString(R.string.cancel), null);
+            if (rule != null) builder.setNeutralButton(getString(R.string.delete), (d, which) -> { store.delete(rule.id); render(); });
             dialog = builder.create();
             dialog.setOnDismissListener(d -> { setRecording(false); if (editor == this) editor = null; });
             dialog.setOnKeyListener((d, keyCode, event) -> {
@@ -439,7 +494,7 @@ public final class MainActivity extends Activity {
                 if (KeyEvent.isModifierKey(keyCode)) return true;
                 int mods = ShortcutStore.modifiersOf(event);
                 String invalid = (event.getMetaState() & (KeyEvent.META_META_ON | KeyEvent.META_SYM_ON | KeyEvent.META_FUNCTION_ON)) != 0
-                    ? "Ctrl·Alt·Shift 조합만 지원" : ShortcutStore.validateChord(keyCode, mods);
+                    ? getString(R.string.error_modifiers) : ShortcutStore.validateChord(MainActivity.this, keyCode, mods);
                 if (invalid != null) { error.setText(invalid); return true; }
                 key = keyCode; modifiers = mods;
                 setRecording(false); error.setText(""); update();
@@ -466,11 +521,11 @@ public final class MainActivity extends Activity {
             if (svc != null) svc.setShortcutRecording(active);
         }
         void update() {
-            record.setText(recording ? "키 조합 입력 중…" : key == KeyEvent.KEYCODE_UNKNOWN ? "키 조합 입력" : ShortcutStore.chordLabel(key, modifiers) + "  ·  다시 입력");
-            hint.setText(recording ? "• Ctrl/Alt + 키\n• Esc: 입력 취소" : "외장 키보드로 입력");
-            action.setText(ActionCatalog.title(actionId) + "  ›");
+            record.setText(recording ? getString(R.string.recording_chord) : key == KeyEvent.KEYCODE_UNKNOWN ? getString(R.string.record_chord) : getString(R.string.record_chord_again, bidi(ShortcutStore.chordLabel(key, modifiers))));
+            hint.setText(recording ? getString(R.string.recording_hint) : getString(R.string.external_keyboard_hint));
+            action.setText(ActionCatalog.title(MainActivity.this, actionId) + "  ›");
             app.setVisibility(ActionCatalog.LAUNCH_APP.equals(actionId) ? View.VISIBLE : View.GONE);
-            app.setText(packageName == null ? "실행할 앱 선택  ›" : appLabel(packageName) + "  ›");
+            app.setText(packageName == null ? getString(R.string.choose_app) + "  ›" : appLabel(packageName) + "  ›");
             Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
             if (save != null) save.setEnabled(!recording && key != KeyEvent.KEYCODE_UNKNOWN
                     && (!ActionCatalog.LAUNCH_APP.equals(actionId) || packageName != null));
@@ -480,9 +535,9 @@ public final class MainActivity extends Activity {
     private interface ActionChoice { void selected(String id); }
     private void chooseAction(String[] ids, String current, ActionChoice callback) {
         String[] titles = new String[ids.length]; int checked = -1;
-        for (int i = 0; i < ids.length; i++) { titles[i] = ActionCatalog.title(ids[i]); if (ids[i].equals(current)) checked = i; }
-        styleDialog(new AlertDialog.Builder(this).setTitle("동작 선택").setSingleChoiceItems(titles, checked,
-                (dialog, which) -> { dialog.dismiss(); callback.selected(ids[which]); }).setNegativeButton("취소", null).show());
+        for (int i = 0; i < ids.length; i++) { titles[i] = ActionCatalog.title(MainActivity.this, ids[i]); if (ids[i].equals(current)) checked = i; }
+        styleDialog(new AlertDialog.Builder(this).setTitle(getString(R.string.choose_action)).setSingleChoiceItems(titles, checked,
+                (dialog, which) -> { dialog.dismiss(); callback.selected(ids[which]); }).setNegativeButton(getString(R.string.cancel), null).show());
     }
     private void chooseApp(Editor target) {
         Intent launcher = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
@@ -492,22 +547,22 @@ public final class MainActivity extends Activity {
             String pkg = candidate.activityInfo.packageName;
             if (seen.add(pkg)) apps.add(new String[]{candidate.loadLabel(getPackageManager()).toString(), pkg});
         }
-        Collator collator = Collator.getInstance(); apps.sort((a, b) -> collator.compare(a[0], b[0]));
+        Collator collator = Collator.getInstance(getResources().getConfiguration().getLocales().get(0)); apps.sort((a, b) -> collator.compare(a[0], b[0]));
         String[] labels = new String[apps.size()];
         for (int i = 0; i < labels.length; i++) labels[i] = apps.get(i)[0];
-        AlertDialog.Builder picker = new AlertDialog.Builder(this).setTitle("실행할 앱 선택").setNegativeButton("취소", null);
-        if (labels.length == 0) picker.setMessage("실행 가능한 앱 없음");
+        AlertDialog.Builder picker = new AlertDialog.Builder(this).setTitle(getString(R.string.choose_app)).setNegativeButton(getString(R.string.cancel), null);
+        if (labels.length == 0) picker.setMessage(getString(R.string.no_launchable_apps));
         else picker.setItems(labels, (d, which) -> { target.packageName = apps.get(which)[1]; target.update(); });
         styleDialog(picker.show());
     }
     private String appLabel(String pkg) {
         try {
-            if (getPackageManager().getLaunchIntentForPackage(pkg) == null) return "앱 없음 · 다시 선택";
+            if (getPackageManager().getLaunchIntentForPackage(pkg) == null) return getString(R.string.app_missing);
             return getPackageManager().getApplicationLabel(getPackageManager().getApplicationInfo(pkg, 0)).toString();
-        } catch (android.content.pm.PackageManager.NameNotFoundException e) { return "앱 없음 · 다시 선택"; }
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) { return getString(R.string.app_missing); }
     }
     private String ruleDescription(ShortcutRule rule) {
-        return ActionCatalog.LAUNCH_APP.equals(rule.actionId) ? "앱 실행 · " + appLabel(rule.packageName) : ActionCatalog.title(rule.actionId);
+        return ActionCatalog.LAUNCH_APP.equals(rule.actionId) ? getString(R.string.launch_app_named, bidi(appLabel(rule.packageName))) : ActionCatalog.title(MainActivity.this, rule.actionId);
     }
     private void openSettings() {
         if (AccessibilityConsent.isAccepted(this)) {
@@ -516,20 +571,17 @@ public final class MainActivity extends Activity {
         }
         if (consentDialog != null && consentDialog.isShowing()) return;
         consentDialog = new AlertDialog.Builder(this)
-                .setTitle("접근성 사용 안내")
-                .setMessage("RightPress는 접근성 API로 마우스 우클릭과 외장 키보드 단축키를 처리합니다. 앱 화면을 닫아도 서비스가 켜져 있으면 작동합니다.\n\n"
-                        + "접근·실행\n• 화면 요소의 계층·위치·지원 동작 확인\n• 키 입력 이벤트를 받아 등록한 단축키와 비교\n• 우클릭·클릭·휠을 길게 누르기·터치·스크롤로 변환\n• 지정한 뒤로·홈·알림·앱 실행 동작 수행\n\n"
-                        + "저장·전송\n• 화면 내용·입력 기록 저장 안 함\n• 설정과 동의 여부만 이 기기에 저장\n• 외부 전송·공유 없음\n\n"
-                        + "Android 접근성 설정에서 언제든 서비스를 끌 수 있습니다.")
-                .setNegativeButton("취소", null)
-                .setPositiveButton("동의하고 설정 열기", null)
+                .setTitle(getString(R.string.consent_title))
+                .setMessage(R.string.consent_body)
+                .setNegativeButton(getString(R.string.cancel), null)
+                .setPositiveButton(getString(R.string.consent_accept), null)
                 .create();
         consentDialog.setOnDismissListener(dialog -> consentDialog = null);
         consentDialog.show();
         styleDialog(consentDialog);
         consentDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
             if (!AccessibilityConsent.accept(this)) {
-                Toast.makeText(this, "동의 저장 실패 · 다시 시도", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.consent_save_failed), Toast.LENGTH_SHORT).show();
                 return;
             }
             consentDialog.dismiss();
@@ -538,20 +590,28 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onDestroy() {
         if (consentDialog != null) consentDialog.dismiss();
+        if (languageDialog != null) languageDialog.dismiss();
         super.onDestroy();
     }
     private void showHelp() {
-        styleDialog(new AlertDialog.Builder(this).setTitle("사용 안내")
-                .setMessage("실행\n• 접근성 연결 후 백그라운드 작동\n• 앱 화면을 닫아도 설정 유지\n• 서비스 해제·강제 중지 시 중단\n\n마우스\n• Ctrl+Alt+R: 마우스만 켜기/끄기\n• 우클릭: 누르는 순간 실행\n• 길게 누르기 미지원: 버튼을 뗀 뒤 터치\n• 클릭·휠: 터치로 변환\n• 드래그·직접 터치 차이 가능\n• 마우스 오버 동작 제한\n\n키보드\n• Ctrl/Alt + 키 조합 지원\n• 일부 시스템 단축키 사용 불가\n\n정보 처리\n• 화면 요소 위치·접근성 동작 확인\n• 화면 내용·입력 기록 저장·전송 안 함\n• 설정은 이 기기에만 저장\n\n시험판\n• Android 14 이상\n• 실물 태블릿·입력장치 확인 필요")
-                .setPositiveButton("확인", null).setNeutralButton("접근성 설정", (d, w) -> openSettings()).show());
+        styleDialog(new AlertDialog.Builder(this).setTitle(getString(R.string.help_title))
+                .setMessage(R.string.help_body)
+                .setPositiveButton(getString(R.string.ok), null).setNeutralButton(getString(R.string.accessibility_settings), (d, w) -> openSettings()).show());
     }
 
     private void styleDialog(AlertDialog dialog) {
         GradientDrawable surface = round(SURFACE, 12); surface.setStroke(dp(1), LINE);
         dialog.getWindow().setBackgroundDrawable(surface);
+        for (int which : new int[]{AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL}) {
+            Button action = dialog.getButton(which);
+            if (action != null) { action.setAllCaps(false); action.setSingleLine(false); action.setMaxLines(4); }
+        }
     }
 
     private LinearLayout column() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.VERTICAL); return v; }
+    private String bidi(String value) {
+        return android.text.BidiFormatter.getInstance(getResources().getConfiguration().getLocales().get(0)).unicodeWrap(value);
+    }
     private LinearLayout row() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.HORIZONTAL); v.setGravity(Gravity.CENTER_VERTICAL); return v; }
     private LinearLayout.LayoutParams fill() { return new LinearLayout.LayoutParams(-1, -2); }
     private void divider(LinearLayout parent) { View line = new View(this); line.setBackgroundColor(LINE); parent.addView(line, new LinearLayout.LayoutParams(-1, dp(1))); }
@@ -578,7 +638,7 @@ public final class MainActivity extends Activity {
         }
     }
     private TextView text(String value, int size, int color, boolean bold) {
-        TextView view = new TextView(this); view.setText(value); view.setTextSize(size); view.setTextColor(color); view.setLineSpacing(dp(3), 1.03f);
+        TextView view = new TextView(this); view.setTextDirection(View.TEXT_DIRECTION_FIRST_STRONG); view.setGravity(Gravity.START); view.setText(value); view.setTextSize(size); view.setTextColor(color); view.setLineSpacing(dp(3), 1.03f);
         if (bold) view.setTypeface(Typeface.DEFAULT, Typeface.BOLD); return view;
     }
     private Button button(String value, int background, int foreground) {
