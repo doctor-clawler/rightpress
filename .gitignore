@@ -1,0 +1,37 @@
+.gradle/
+.idea/
+build/
+app/build/
+local.properties
+*.iml
+.DS_Store
+
+# Private signing material and machine-local settings
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+*signing*.json
+*signing*.properties
+.env
+.env.*
+env.*.local
+
+# Generated binaries and private verification history
+*.apk
+*.aab
+*.apks
+evidence/
+output/
+artifacts/
+qa/
+openspec/
+design-qa.md
+__pycache__/
+*.pyc
+
+# Only curated public screenshots live in docs.
+docs/*
+!docs/images/

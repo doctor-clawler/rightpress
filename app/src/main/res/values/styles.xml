@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="RightPressTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:colorAccent">#87AEFF</item>
+        <item name="android:colorBackground">#14171C</item>
+        <item name="android:windowBackground">#14171C</item>
+        <item name="android:colorPrimary">#14171C</item>
+        <item name="android:colorPrimaryDark">#0F1217</item>
+        <item name="android:textColorPrimary">#F0F2F5</item>
+        <item name="android:textColorSecondary">#A3ABB7</item>
+        <item name="android:navigationBarColor">#0F1217</item>
+        <item name="android:statusBarColor">#14171C</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

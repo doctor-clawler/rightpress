@@ -1,0 +1,61 @@
+plugins {
+    id 'com.android.application'
+}
+
+def signingNames = ['RIGHTPRESS_SIGNING_STORE_FILE', 'RIGHTPRESS_SIGNING_STORE_PASSWORD',
+                    'RIGHTPRESS_SIGNING_KEY_ALIAS', 'RIGHTPRESS_SIGNING_KEY_PASSWORD']
+def signingValues = signingNames.collectEntries { [(it): System.getenv(it)] }
+def hasReleaseSigning = signingValues.values().every { it != null && !it.isBlank() }
+// Inspect resolved tasks so aggregate commands (assemble/build/bundle) cannot
+// accidentally package an unsigned public release. Debug and lint remain key-free.
+gradle.taskGraph.whenReady { graph ->
+    if (!hasReleaseSigning && graph.allTasks.any {
+        it.project == project && it.name in ['packageRelease', 'packageReleaseBundle', 'packageReleaseAndroidTest']
+    }) {
+        throw new GradleException('Release builds require all RIGHTPRESS_SIGNING_* environment variables. See README.md.')
+    }
+}
+
+android {
+    namespace 'io.github.doctor_clawler.rightpress'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'io.github.doctor_clawler.rightpress'
+        minSdk 34
+        targetSdk 35
+        versionCode 7
+        versionName '0.5.0-beta.1'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(signingValues['RIGHTPRESS_SIGNING_STORE_FILE'])
+                storePassword signingValues['RIGHTPRESS_SIGNING_STORE_PASSWORD']
+                keyAlias signingValues['RIGHTPRESS_SIGNING_KEY_ALIAS']
+                keyPassword signingValues['RIGHTPRESS_SIGNING_KEY_PASSWORD']
+            }
+        }
+    }
+    buildTypes {
+        release {
+            debuggable false
+            if (hasReleaseSigning) signingConfig signingConfigs.release
+        }
+    }
+    testBuildType System.getenv('RIGHTPRESS_TEST_BUILD_TYPE') ?: 'debug'
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    androidTestCompileOnly files(
+        "${android.sdkDirectory}/platforms/android-35/optional/android.test.base.jar",
+        "${android.sdkDirectory}/platforms/android-35/optional/android.test.runner.jar"
+    )
+}

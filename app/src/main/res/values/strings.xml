@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RightPress</string>
+    <string name="accessibility_description">• 우클릭 변환·키보드 단축키 실행\n• 마지막 설정 유지\n• 화면 요소 위치·길게 누르기 동작 확인\n• 우클릭 즉시 실행 · 미지원 화면은 버튼을 뗀 뒤 터치\n• 클릭·휠을 터치로 변환\n• Ctrl/Alt 단축키·앱 실행 지원\n• Ctrl+Alt+R: 마우스만 켜기/끄기\n• 화면 내용·입력 기록 저장·전송 안 함</string>
+</resources>
