@@ -1,6 +1,6 @@
 # RightPress privacy notice / 개인정보 안내
 
-Effective: 2026-10-25. Applies to RightPress 0.6.0-beta.1.
+Effective: 2026-10-26. Applies to RightPress 0.6.0-beta.1 and 0.6.1-beta.1. This revision updates version coverage and distribution information; the app's data handling is unchanged.
 
 ## English
 
@@ -36,13 +36,15 @@ Technical failures may create messages in Android's local system log. The app do
 
 GitHub hosts the source, APK downloads and issue tracker. Using GitHub is separate from the app's local processing and is governed by [GitHub's privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
 
+If you join a test or download RightPress through Google Play, those store services are provided by Google and are covered by [Google's privacy policy](https://policies.google.com/privacy). Store account and test participation processing is separate from RightPress's on-device input handling. Google Play distribution does not add an account system or data-upload feature to RightPress.
+
 For questions about this notice, open an issue in [this repository](https://github.com/doctor-clawler/rightpress/issues). Issues and attachments are public: do not include personal information, passwords or private screen contents. For security vulnerabilities, follow [SECURITY.md](SECURITY.md).
 
 This notice will be updated when the app's data handling changes.
 
 ## 한국어
 
-- 대상: RightPress 0.6.0-beta.1. 적용일: 2026-10-25.
+- 대상: RightPress 0.6.0-beta.1·0.6.1-beta.1. 적용일: 2026-10-26. 이번 갱신은 버전 범위·배포 경로 안내만 변경. 앱의 데이터 처리 방식은 동일.
 - 계정·광고·분석 SDK·원격 서버·인터넷 권한 없음. 개발자에게 데이터 전송 없음.
 - 화면 접근성 정보: 요소 위치·계층·표시 상태·동작 확인에 사용. 요소 텍스트 읽기, 화면 내용 보관, 스크린샷 촬영 없음.
 - 포인터·터치 정보: 좌표·버튼·이동을 터치 제스처로 변환할 때 일시 사용.
@@ -59,4 +61,5 @@ This notice will be updated when the app's data handling changes.
 - 삭제: 개별 단축키 삭제 가능. 앱 저장공간 삭제·앱 제거 시 로컬 설정·동의 상태 삭제.
 - 문의: [GitHub Issues](https://github.com/doctor-clawler/rightpress/issues). 게시물은 공개되므로 개인정보·인증정보·비공개 화면 제외. 보안 제보는 [SECURITY.md](SECURITY.md).
 - GitHub 소스·APK 다운로드·문의 기능은 앱과 별도. [GitHub 개인정보 정책](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) 적용.
+- Google Play에서 테스트에 참여하거나 앱을 받는 경우 해당 스토어 서비스에는 [Google 개인정보 정책](https://policies.google.com/privacy) 적용. 스토어 계정·테스트 참여 처리는 RightPress의 기기 내 입력 처리와 별도. Play 배포로 앱에 계정·데이터 업로드 기능을 추가하지 않음.
 - 데이터 처리 변경 시 이 안내 갱신.
