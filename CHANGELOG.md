@@ -1,13 +1,15 @@
 # Changelog
 
-## 0.6.1-beta.1 — pending Google Play distribution
+## 0.6.1-beta.1 — Google Play internal test (2026-10-27)
 
 - Target Android 16 (API 36) while retaining Android 14 as the minimum version.
 - Update Android Gradle Plugin to 8.10.1 and Gradle to 8.11.1; compile instrumentation against the selected SDK.
 - Prepare a signed Android App Bundle with all 31 locales included for offline language selection.
 - Keep the existing package, APK signing certificate, accessibility consent and saved settings.
+- Publish versionCode 9 to the Google Play internal track for the five registered beta tester accounts. [Test invitation](https://play.google.com/apps/internaltest/4701300851549043962).
+- Enroll the existing app signing key in Play App Signing and verify that the Play app signing certificate matches the official GitHub APK certificate.
 
-Google Play internal-test publication and a working tester link are separate release gates. Building this version does not resolve or bypass Android accessibility restrictions.
+The Console reports the release as available to internal testers and unreviewed. The invitation currently uses the temporary name `io.github.doctor_clawler.rightpress (unreviewed)`; opening it with a registered account was verified. Invitation acceptance, Play installation and physical-tablet accessibility remain unverified. Play installation does not automatically grant accessibility access or establish standard policy approval. The latest GitHub APK release remains 0.6.0-beta.1.
 
 ## 0.6.0-beta.1
 

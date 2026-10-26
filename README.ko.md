@@ -2,10 +2,9 @@
 
 **Android 14 이상** 마우스 버튼·외장 키보드 단축키 유틸리티.
 
-- 다운로드 가능 베타: **0.6.0-beta.1**
-- 다운로드: [GitHub 베타 출시 페이지](https://github.com/doctor-clawler/rightpress/releases/tag/v0.6.0-beta.1)의 APK
-- 소스 버전: **0.6.1-beta.1**. Android 16 대상 빌드·Google Play 제출용 AAB 준비.
-- Google Play: 아직 설치 불가. 테스트 참여 링크 미발급.
+- Google Play 내부 베타: **0.6.1-beta.1 (9)**. [테스트 참여](https://play.google.com/apps/internaltest/4701300851549043962). 기존 명단의 등록 계정 5개만 참여 가능.
+- 현재 초대 페이지 표시명: `io.github.doctor_clawler.rightpress (unreviewed)`. 일반 심사 전 임시 이름.
+- GitHub APK 베타: **0.6.0-beta.1**. [출시 페이지](https://github.com/doctor-clawler/rightpress/releases/tag/v0.6.0-beta.1)에서 다운로드.
 - 앱 표시 언어: **30개 언어·31개 로캘**. 중국어 간체·번체 포함.
 
 [English](README.md) · [개인정보 안내](PRIVACY.md) · [변경 기록](CHANGELOG.md) · [언어 지원](LOCALIZATION.md) · [기여 안내](CONTRIBUTING.md)
@@ -31,6 +30,18 @@
 
 ## 베타 설치
 
+### Google Play 내부 테스트
+
+1. 등록된 테스터 Google 계정으로 로그인한 상태에서 [테스트 초대 링크](https://play.google.com/apps/internaltest/4701300851549043962) 열기. 기존 베타 명단의 5개 계정만 참여 가능.
+2. **Accept invite**로 초대 수락 → Google Play 설치 링크로 이동 → 설치.
+3. RightPress 실행 → `접근성 서비스 켜기` → 사용 안내 확인 → 동의.
+4. 앱에서 Android 접근성 설정 열기 → **RightPress 입력 도우미** 켜기.
+5. 앱 복귀 → `마우스`·`키보드` 탭 설정.
+
+내부 테스트는 테스터에게 제공 중이며 일반 Google Play 심사는 받지 않은 상태. 등록 계정에서 초대 페이지가 열리는 것까지 확인. 초대 수락·Play 설치·실물 태블릿 접근성 동작은 미검증. Play에서 설치해도 접근성 권한은 직접 허용해야 함.
+
+### GitHub APK
+
 1. [Releases](https://github.com/doctor-clawler/rightpress/releases/tag/v0.6.0-beta.1)에서 APK 다운로드. Actions 산출물은 개발용 debug 빌드.
 2. Android 14 이상 기기에 설치. 필요 시 다운로드 앱의 외부 앱 설치 허용.
 3. RightPress 실행 → `접근성 서비스 켜기` → 사용 안내 확인 → 동의.
@@ -39,7 +50,7 @@
 
 외부 설치 앱의 접근성이 제한된 경우: 신뢰하는 APK에 한해 Android **앱 정보 → 더보기 → 제한된 설정 허용**. 메뉴 이름은 기기별 차이 있음.
 
-**공식 0.5.0 베타 사용자:** 새 서명 APK로 업데이트 설치. 패키지·배포 서명키 유지. 설정·단축키 유지.
+**공식 GitHub 베타 사용자:** Play 내부 베타도 기존 패키지·앱 서명 인증서 유지. 에뮬레이터에서 서명 APK의 0.6.0→0.6.1 업데이트로 설정·단축키·동의 상태 보존 확인. 실제 Play 업데이트는 기기 검증 필요. GitHub 0.6.0 APK는 공식 0.5.0 베타에 업데이트 설치 가능.
 
 **이전 비공개 테스트판 사용자:** 베타 패키지는 `io.github.doctor_clawler.rightpress`, 서명은 전용 배포키 사용. 기존 `com.example.rightpress` debug 앱(0.4.0 이하)과 별개이므로 **업데이트가 아닌 새 설치**. 기존 설정을 기록하고 기존 접근성 서비스를 먼저 OFF. 두 앱을 함께 둘 수 있지만 RightPress 서비스는 하나만 활성화. 설정 자동 이전 없음. 베타에서 다시 설정 필요. 직접 빌드한 debug APK도 공식 베타와 서명이 달라 덮어쓰기 불가.
 
@@ -83,7 +94,7 @@
 - 앱 실행: RightPress에서 조회 가능한 실행 앱만 지원.
 - 미지원: 키-대-키 변경 · 문구 자동 입력 · 매크로 · 앱별 프로필.
 - 실물 태블릿·Bluetooth/USB 입력장치·DeX·분할 화면·외부 디스플레이·배터리 영향: 추가 검증 필요.
-- 특정 외부 앱의 동작 보장 없음. 에뮬레이터 검증·GitHub 베타 배포와 Google Play 심사는 별개.
+- 특정 외부 앱의 동작 보장 없음. 에뮬레이터 검증·GitHub 베타 배포·내부 테스트 제공과 Google Play 일반 심사는 별개.
 
 오류 제보: [GitHub Issues](https://github.com/doctor-clawler/rightpress/issues). 앱·Android 버전, 기기·입력장치 모델, 연결 방식, 화면 방향, 재현 단계 포함. 공개 게시물이므로 개인정보·인증정보·비공개 화면 제외. 보안 취약점은 [SECURITY.md](SECURITY.md) 참조.
 

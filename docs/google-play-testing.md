@@ -1,6 +1,18 @@
 # Google Play 테스트 배포
 
-현재 준비 버전: `0.6.1-beta.1` / versionCode `9`. Google Play 설치 링크는 아직 발급되지 않았다. GitHub APK 다운로드와 Play 내부 테스트 설치는 서로 다른 배포 경로다.
+현재 Play 내부 테스트 버전: **`0.6.1-beta.1` / versionCode `9`**. 2026-10-27 01:57 KST에 Console의 **내부 테스터에게 제공됨** 상태와 **검토되지 않음** 표시를 확인했다.
+
+[Google Play 테스트 참여](https://play.google.com/apps/internaltest/4701300851549043962). 기존 `Stack Rush App Tester Beta` 목록의 등록 계정 5개만 참여할 수 있다. GitHub APK의 최신 공개 버전은 [0.6.0-beta.1](https://github.com/doctor-clawler/rightpress/releases/tag/v0.6.0-beta.1)이다.
+
+## 설치
+
+1. 등록된 테스터 Google 계정으로 로그인한 상태에서 위 참여 링크를 연다.
+2. **Accept invite**로 초대를 수락한 뒤 Google Play 설치 링크를 따른다.
+3. RightPress를 실행하고 접근성 사용 안내를 읽고 동의한다.
+4. 앱에서 Android 접근성 설정을 열어 **RightPress 입력 도우미**를 켠다.
+5. 앱으로 돌아와 마우스·키보드 기능을 설정한다.
+
+초대 페이지는 현재 임시 이름 `io.github.doctor_clawler.rightpress (unreviewed)`를 표시한다. 등록 계정으로 초대 페이지와 `Accept invite` 버튼을 확인했으며, 초대 수락이나 실제 Play 설치는 실행하지 않았다. 실물 태블릿에서의 접근성·입력 동작도 추가 검증이 필요하다.
 
 ## 빌드
 
@@ -19,7 +31,7 @@ AAB: `app/build/outputs/bundle/release/app-release.aab`.
 
 ## 기존 설치와 서명
 
-Play App Signing에 등록할 때 **기존 앱 서명키 사용**을 선택해야 GitHub APK와 업데이트 호환성을 유지할 수 있다. AAB를 기존 키로 서명하는 것만으로 Play 설치 APK의 서명이 일치하는 것은 아니다. Google이 새 앱 서명키를 생성하면 기존 키는 업로드키로만 쓰일 수 있다.
+Play App Signing에 **기존 앱 서명키**를 등록했다. PEPK 암호화 파일 업로드·저장 후 Console의 **앱 서명 인증서**가 기존 공식 APK 인증서와 일치함을 확인했다. AAB 업로드 인증서만 비교한 결과가 아니다.
 
 기존 공식 APK의 앱 서명 인증서 SHA-256:
 
@@ -27,7 +39,15 @@ Play App Signing에 등록할 때 **기존 앱 서명키 사용**을 선택해�
 28:BB:0C:A0:7D:34:46:6F:92:AD:DA:DE:BB:06:14:F9:EE:EB:52:7F:CD:1D:B8:76:4B:DA:74:C9:8F:00:EA:E0
 ```
 
-Play Console에서 제공하는 PEPK 절차로 키를 암호화해 전송하고, 등록 후 **앱 서명 인증서** 값을 비교한다. 키 원본·암호·암호화한 키 파일은 저장소나 GitHub 릴리스에 올리지 않는다. 서명이 다르면 삭제 후 재설치를 업데이트 검증의 대체로 삼지 않는다.
+키 원본·암호·암호화한 키 파일은 저장소나 GitHub 릴리스에 올리지 않는다. 향후 서명 변경 시에도 앱 서명 인증서를 비교하며, 삭제 후 재설치를 업데이트 검증의 대체로 삼지 않는다.
+
+## 배포 검증 기록
+
+- 제출한 AAB SHA-256: `db33c990f7d69a8aad0ea819200426af9fbafd6dae96a911a0fc59efb0a439ac`.
+- Console이 AAB를 수락한 뒤 package `io.github.doctor_clawler.rightpress`, versionCode `9`, minSdk `34`, targetSdk `36`을 확인했다.
+- 내부 트랙의 `0.6.1-beta.1 (9)`가 활성 상태이며 내부 테스터에게 제공됨을 확인했다.
+- `Stack Rush App Tester Beta` 5계정 목록만 선택되어 있고, 다른 목록은 미선택이며 저장 버튼이 비활성화된 저장 상태를 확인했다.
+- Console에서 발급한 참여 링크를 등록 계정으로 열어 초대 페이지가 표시됨을 확인했다. 명단 등록·사용자 참여·실제 설치는 각각 별도 단계다.
 
 ## 내부 테스트 완료 기준
 

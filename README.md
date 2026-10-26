@@ -2,7 +2,9 @@
 
 Mouse button actions and external-keyboard shortcuts for **Android 14+**.
 
-**Latest downloadable beta: 0.6.0-beta.1.** [Release page](https://github.com/doctor-clawler/rightpress/releases/tag/v0.6.0-beta.1). Official beta APKs are attached to releases marked **Pre-release**. Source version 0.6.1-beta.1 prepares Android 16 targeting and a signed app bundle for Google Play internal testing. RightPress is not yet available on Google Play; there is no Play test link yet.
+**Google Play internal beta: 0.6.1-beta.1 (9).** [Join the internal test](https://play.google.com/apps/internaltest/4701300851549043962) with one of the five registered tester accounts. The invitation currently shows the temporary name `io.github.doctor_clawler.rightpress (unreviewed)`.
+
+**Latest GitHub APK beta: 0.6.0-beta.1.** [Release page](https://github.com/doctor-clawler/rightpress/releases/tag/v0.6.0-beta.1). Official beta APKs are attached to releases marked **Pre-release**.
 
 [한국어](README.ko.md) · [Privacy](PRIVACY.md) · [Changelog](CHANGELOG.md) · [Languages](LOCALIZATION.md) · [Contributing](CONTRIBUTING.md)
 
@@ -27,6 +29,18 @@ For long-press, RightPress first requests the target element's accessibility lon
 
 ## Install the beta
 
+### Google Play internal test
+
+1. Open the [test invitation](https://play.google.com/apps/internaltest/4701300851549043962) while signed in with a registered tester Google account. Access is limited to the five accounts in the existing beta list.
+2. Select **Accept invite**, then follow the Google Play installation link.
+3. Open RightPress → `Enable accessibility service`, read the disclosure and agree if you want to use the service.
+4. Open Android accessibility settings from the app and enable **RightPress input helper**.
+5. Return to RightPress and configure the `Mouse` and `Keyboard` tabs.
+
+The internal release is available to testers and has not received standard Google Play review. The registered-account invitation page was verified; accepting the invitation, installing from Play and testing accessibility on a physical tablet remain unverified. Play installation does not automatically grant accessibility access.
+
+### GitHub APK
+
 1. Download the APK from [Releases](https://github.com/doctor-clawler/rightpress/releases/tag/v0.6.0-beta.1). Actions artifacts are development builds, not the signed beta.
 2. Install it on Android 14 or later. Allow installation from your download app if Android asks.
 3. Open RightPress → `Enable accessibility service`, read the accessibility disclosure and agree if you want to use the service.
@@ -35,7 +49,7 @@ For long-press, RightPress first requests the target element's accessibility lon
 
 Android can restrict accessibility for sideloaded apps. If necessary, open Android **App info → More → Allow restricted settings**, but only for an APK whose source you trust. Menu names vary by device.
 
-**Updating from the official 0.5.0 beta:** install the new signed APK over the existing app. The package and release signing key are unchanged, so settings and shortcuts are retained.
+**Updating from an official GitHub beta:** the Play internal release uses the same package and app signing certificate. A signed 0.6.0→0.6.1 APK update preserved settings, shortcuts and consent in emulator tests; an actual Play update still needs device verification. The GitHub 0.6.0 APK also updates the official 0.5.0 beta in place.
 
 **Earlier private test builds:** the beta uses package `io.github.doctor_clawler.rightpress` and a dedicated release signing key. The former `com.example.rightpress` debug app (0.4.0 or earlier) is a separate app, so this is a **new installation**, not an in-place update. Record your old settings and disable its accessibility service first. Both apps can remain installed, but enable only one RightPress service at a time. Settings do not migrate automatically; recreate them in the beta. Locally built debug APKs also cannot update official beta APKs because their signatures differ.
 
@@ -76,7 +90,7 @@ Mouse conversion uses a full-screen transparent accessibility overlay. Left clic
 - App-launch shortcuts support launchable apps visible to RightPress.
 - No key-to-key remapping, text expansion, macros or per-app profiles.
 - Physical tablets, Bluetooth/USB input devices, Samsung DeX, split screen, external displays and battery impact still need testing. Individual third-party apps are not guaranteed compatible.
-- Emulator checks and a GitHub beta release do not establish Google Play approval.
+- Emulator checks, GitHub beta releases and internal-test availability do not establish standard Google Play approval.
 
 Report reproducible problems through [GitHub Issues](https://github.com/doctor-clawler/rightpress/issues). Include app/Android version, device and input-device models, connection type, screen orientation and steps. Issues are public: remove personal content, credentials and private screenshots. For vulnerabilities, see [SECURITY.md](SECURITY.md).
 
