@@ -129,3 +129,9 @@ Device tests are in `app/src/androidTest`. Some inject physical key events throu
 Original RightPress code and artwork: [MIT](LICENSE). Gradle wrapper files retain their upstream license; see [third-party notices](THIRD_PARTY_NOTICES.md).
 
 The trigger-to-action setup flow was informed by Key Mapper's public documentation. RightPress has its own implementation and visual assets; no Key Mapper source or artwork is included.
+
+## 공통 웹 빌드 주소
+
+웹 빌드·미리보기의 공통 계약은 [웹 배포](../_ops/docs/local-web-deployment.md)와 [내부 DNS](../_ops/docs/internal-dns.md)를 따른다. 완료 주소는 대표 `http://<channel>.home.arpa/`, 변형 `http://rightpress.<variation>.home.arpa/`이며 포트를 붙이지 않는다. 채널명은 소문자로 바꾸고 `_`는 `-`로 정규화하며 기존 짧은 별칭은 호환 주소로 보존한다.
+
+백엔드는 `env.dev.local`과 중앙 allocator를 사용해 LAN에 bind하고, 소유 listener·LAN HTTP·대표/변형 주소의 이번 빌드를 확인한 뒤 요청 thread에 결과를 반환한다. 프로젝트 고유 빌드·데이터 보존·배포 gate는 유지한다. 웹 미지원 프로젝트에 이 지침만으로 새 웹 지원이나 상시 서비스를 추가하지 않는다.
