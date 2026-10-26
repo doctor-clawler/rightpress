@@ -36,3 +36,15 @@ __pycache__/
 docs/*
 !docs/images/
 !docs/google-play-testing.md
+
+# Added by _ops promote-thread
+.godot/
+.playwright-cli/
+.local/
+.internal/
+.kotlin/
+Library/
+Logs/
+UserSettings/
+input/
+node_modules/

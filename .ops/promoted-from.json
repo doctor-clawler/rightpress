@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "promotedAt": "2026-10-26T16:46:01.046Z",
+  "project": {
+    "slug": "rightpress",
+    "displayName": "RightPress"
+  },
+  "source": {
+    "kind": "slack-playground-thread",
+    "threadPermalink": "https://mibcompany.slack.com/archives/C0B07FH4M3R/p1792753816563239",
+    "playgroundRelativePath": "rightpress-android-20261023/source/RightPress-Android",
+    "playgroundSourcePath": "/Volumes/BigHugeMemory/works/playground/rightpress-android-20261023/source/RightPress-Android"
+  }
+}
