@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1-beta.1 — pending Google Play distribution
+
+- Target Android 16 (API 36) while retaining Android 14 as the minimum version.
+- Update Android Gradle Plugin to 8.10.1 and Gradle to 8.11.1; compile instrumentation against the selected SDK.
+- Prepare a signed Android App Bundle with all 31 locales included for offline language selection.
+- Keep the existing package, APK signing certificate, accessibility consent and saved settings.
+
+Google Play internal-test publication and a working tester link are separate release gates. Building this version does not resolve or bypass Android accessibility restrictions.
+
 ## 0.6.0-beta.1
 
 - Add 30 languages / 31 locales, including Simplified and Traditional Chinese.

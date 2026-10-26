@@ -33,7 +33,7 @@ jobs:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
       - name: Install Android platform and build tools
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
       - name: Check translation coverage and format arguments
         run: python3 tools/localization.py check
       - name: Build debug app, lint and instrumentation APK

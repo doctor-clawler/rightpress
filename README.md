@@ -2,7 +2,7 @@
 
 Mouse button actions and external-keyboard shortcuts for **Android 14+**.
 
-**Beta version: 0.6.0-beta.1.** [Release page](https://github.com/doctor-clawler/rightpress/releases/tag/v0.6.0-beta.1). Official beta APKs are attached to releases marked **Pre-release**. RightPress is not currently published on Google Play.
+**Latest downloadable beta: 0.6.0-beta.1.** [Release page](https://github.com/doctor-clawler/rightpress/releases/tag/v0.6.0-beta.1). Official beta APKs are attached to releases marked **Pre-release**. Source version 0.6.1-beta.1 prepares Android 16 targeting and a signed app bundle for Google Play internal testing. RightPress is not yet available on Google Play; there is no Play test link yet.
 
 [한국어](README.ko.md) · [Privacy](PRIVACY.md) · [Changelog](CHANGELOG.md) · [Languages](LOCALIZATION.md) · [Contributing](CONTRIBUTING.md)
 
@@ -86,14 +86,14 @@ The service receives input events to match shortcuts and inspects the screen's a
 
 ## Build and test
 
-Requirements: JDK 17, Android SDK Platform 35, Build Tools 35.0.0 and Python 3 for translation checks. Configure `ANDROID_HOME`, or set `sdk.dir` in an untracked `local.properties` file.
+Requirements: JDK 17, Android SDK Platform 36, Build Tools 35.0.0 and Python 3 for translation checks. Configure `ANDROID_HOME`, or set `sdk.dir` in an untracked `local.properties` file. The app still runs on Android 14 and later (minSdk 34).
 
 ```sh
 python3 tools/localization.py check
 ./gradlew :app:assembleDebug :app:lintDebug :app:assembleDebugAndroidTest
 ```
 
-The included Gradle 8.10.2 wrapper verifies its distribution SHA-256. Output: `app/build/outputs/apk/debug/app-debug.apk`. Debug builds use a local debug key and do not update the signed public beta. Release signing keys are not in this repository or GitHub Actions.
+The included Gradle 8.11.1 wrapper verifies its distribution SHA-256; Android Gradle Plugin is 8.10.1. Output: `app/build/outputs/apk/debug/app-debug.apk`. Debug builds use a local debug key and do not update the signed public beta. Release signing keys are not in this repository or GitHub Actions.
 
 To build a release APK with **your own** signing key, provide these environment variables through your local secret-management setup, then run `./gradlew :app:assembleRelease`:
 
@@ -103,6 +103,8 @@ To build a release APK with **your own** signing key, provide these environment 
 - `RIGHTPRESS_SIGNING_KEY_PASSWORD`
 
 The `assembleRelease` command fails if signing credentials are missing. Output: `app/build/outputs/apk/release/app-release.apk`. Your signature does not match the official beta signature; keep your key private and retain it for your own future updates.
+
+With the same signing environment, `./gradlew :app:bundleRelease` creates `app/build/outputs/bundle/release/app-release.aab` for a store upload. Language splitting is disabled so all supported languages remain available offline. An AAB build alone does not publish an app or create a tester link. See [Google Play test delivery](docs/google-play-testing.md) for release and signing checks.
 
 **GitHub Actions:** pushes, pull requests and manual runs check translation coverage and format arguments, build the debug app, run lint and compile instrumentation tests. Download the `RightPress-debug-build` artifact. CI does not execute the device tests.
 

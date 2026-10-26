@@ -32,6 +32,7 @@ design-qa.md
 __pycache__/
 *.pyc
 
-# Only curated public screenshots live in docs.
+# Only curated public screenshots and release guidance live in docs.
 docs/*
 !docs/images/
+!docs/google-play-testing.md

@@ -2,9 +2,10 @@
 
 **Android 14 이상** 마우스 버튼·외장 키보드 단축키 유틸리티.
 
-- 베타 버전: **0.6.0-beta.1**
+- 다운로드 가능 베타: **0.6.0-beta.1**
 - 다운로드: [GitHub 베타 출시 페이지](https://github.com/doctor-clawler/rightpress/releases/tag/v0.6.0-beta.1)의 APK
-- Google Play: 미등록
+- 소스 버전: **0.6.1-beta.1**. Android 16 대상 빌드·Google Play 제출용 AAB 준비.
+- Google Play: 아직 설치 불가. 테스트 참여 링크 미발급.
 - 앱 표시 언어: **30개 언어·31개 로캘**. 중국어 간체·번체 포함.
 
 [English](README.md) · [개인정보 안내](PRIVACY.md) · [변경 기록](CHANGELOG.md) · [언어 지원](LOCALIZATION.md) · [기여 안내](CONTRIBUTING.md)
@@ -96,7 +97,8 @@
 
 ## 빌드·검사
 
-- JDK 17 · Android SDK Platform 35 · Build Tools 35.0.0 · 번역 검사에 Python 3 사용.
+- JDK 17 · Android SDK Platform 36 · Build Tools 35.0.0 · 번역 검사에 Python 3 사용.
+- 설치 가능한 최소 버전: Android 14 유지(minSdk 34).
 - `ANDROID_HOME` 설정 또는 Git에서 제외된 `local.properties`에 `sdk.dir` 지정.
 
 ```sh
@@ -104,7 +106,7 @@ python3 tools/localization.py check
 ./gradlew :app:assembleDebug :app:lintDebug :app:assembleDebugAndroidTest
 ```
 
-- Gradle 8.10.2 wrapper 포함. 배포 파일 SHA-256 검증.
+- Gradle 8.11.1 wrapper · Android Gradle Plugin 8.10.1. 배포 파일 SHA-256 검증.
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
 - debug 빌드: 로컬 debug 서명. 공식 베타에 업데이트 설치 불가.
 - 배포 서명키: 저장소·GitHub Actions에 미포함.
@@ -117,6 +119,8 @@ python3 tools/localization.py check
 - `RIGHTPRESS_SIGNING_KEY_PASSWORD`
 
 서명 정보 누락 시 `assembleRelease` 실패. 출력: `app/build/outputs/apk/release/app-release.apk`. 개인 서명키는 공식 베타와 다름. 키 비공개 보관·업데이트용 유지 필요.
+
+같은 서명 환경에서 `./gradlew :app:bundleRelease` 실행 시 스토어 제출용 `app/build/outputs/bundle/release/app-release.aab` 생성. 언어 분할을 꺼서 지원 언어 전체를 오프라인 제공. AAB 빌드만으로 Play 배포·테스터 링크 발급이 완료되지는 않음. [Google Play 테스트 배포 절차](docs/google-play-testing.md) 참조.
 
 - GitHub Actions: push·PR·수동 실행 시 번역 누락·서식 인자 검사, debug 빌드·lint·계측 테스트 컴파일. `RightPress-debug-build` 산출물 제공. 기기 테스트 실행은 CI 범위 밖.
 - 기기 테스트: `app/src/androidTest`. 일부 검사는 테스트용 root 접근이 가능한 일회용 AOSP 에뮬레이터에서 `evdev` 입력 사용. 실물 기기에 일반 테스트 명령으로 실행하지 않음. 테스트 도구는 설치용 APK에서 제외. 앱 자체는 루트 불필요. [기여 안내](CONTRIBUTING.md) 참조.

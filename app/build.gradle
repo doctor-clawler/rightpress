@@ -18,14 +18,14 @@ gradle.taskGraph.whenReady { graph ->
 
 android {
     namespace 'io.github.doctor_clawler.rightpress'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId 'io.github.doctor_clawler.rightpress'
         minSdk 34
-        targetSdk 35
-        versionCode 8
-        versionName '0.6.0-beta.1'
+        targetSdk 36
+        versionCode 9
+        versionName '0.6.1-beta.1'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
 
@@ -67,7 +67,7 @@ android {
 
 dependencies {
     androidTestCompileOnly files(
-        "${android.sdkDirectory}/platforms/android-35/optional/android.test.base.jar",
-        "${android.sdkDirectory}/platforms/android-35/optional/android.test.runner.jar"
+        "${android.sdkDirectory}/platforms/android-${android.compileSdk}/optional/android.test.base.jar",
+        "${android.sdkDirectory}/platforms/android-${android.compileSdk}/optional/android.test.runner.jar"
     )
 }
